@@ -305,7 +305,7 @@ def compute_market_health(pair_states: list[dict], recent_trades: list[dict]) ->
 
 # ── Main scan ─────────────────────────────────────────────────────────────────
 
-async def run_full_scan(hl_client, market_health: Optional[dict] = None) -> list[dict]:
+async def run_full_scan(client, market_health: Optional[dict] = None) -> list[dict]:
     global _scan_count
 
     _scan_count += 1
@@ -314,7 +314,7 @@ async def run_full_scan(hl_client, market_health: Optional[dict] = None) -> list
     for symbol in PAIRS:
         try:
             await asyncio.sleep(0.5)  # rate-limit spacing — 12 pairs × 0.5s = 6s minimum spread
-            candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(hl_client, symbol)
+            candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
 
             if not price or price == 0:
                 log.warning(f"[SCAN] {symbol} — no price, skipping")
@@ -474,13 +474,13 @@ async def run_full_scan(hl_client, market_health: Optional[dict] = None) -> list
     return new_alerts
 
 
-async def scan_pair_state(hl_client) -> list[dict]:
+async def scan_pair_state(client) -> list[dict]:
     """Return lightweight per-pair indicator state for the dashboard grid."""
     states = []
     for symbol in PAIRS:
         try:
             await asyncio.sleep(0.5)  # rate-limit spacing between pairs
-            candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(hl_client, symbol)
+            candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
             if not price:
                 states.append({"symbol": symbol, "price": 0})
                 continue
@@ -530,13 +530,13 @@ async def scan_pair_state(hl_client) -> list[dict]:
     return states
 
 
-async def _fetch_pair_data(hl_client, symbol: str):
+async def _fetch_pair_data(client, symbol: str):
     candles_5m, candles_15m, candles_1h, book, price = await asyncio.gather(
-        hl_client.get_candles(symbol, "5m",  100),
-        hl_client.get_candles(symbol, "15m", 100),
-        hl_client.get_candles(symbol, "1h",  100),
-        hl_client.get_orderbook(symbol, 20),
-        hl_client.get_price(symbol),
+        client.get_candles(symbol, "5m",  100),
+        client.get_candles(symbol, "15m", 100),
+        client.get_candles(symbol, "1h",  100),
+        client.get_orderbook(symbol, 20),
+        client.get_price(symbol),
     )
     return candles_5m, candles_15m, candles_1h, book, price
 

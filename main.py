@@ -220,7 +220,7 @@ def _save_state():
         return
     try:
         data = {
-            "id":                     1,
+            "id":                     2,
             "saved_date":             datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "open_trades":            app_state.open_trades,
             "margin_deployed":        app_state.margin_deployed,
@@ -282,7 +282,7 @@ def _load_state():
             print(f"[RESTORE] trade log: {len(log_rows.data)} entries restored")
 
         # ── Scanner state ──────────────────────────────────────────────────────
-        result = sb.table("scanner_state").select("*").eq("id", 1).execute()
+        result = sb.table("scanner_state").select("*").eq("id", 2).execute()
         if not result.data:
             print("[RESTORE] No state row found — starting fresh")
             return
@@ -1380,5 +1380,14 @@ async def clear_tradelog():
     app_state.alerts.clear()
     clear_all_scanner_state()
 
+
+    # Delete only MEXC rows from Supabase trade_log — never touches HL data
+    _sb = _get_supabase()
+    if _sb is not None:
+        try:
+            _sb.table("trade_log").delete().eq("exchange", "MEXC").execute()
+            print("[CLEAR] Supabase trade_log MEXC rows deleted")
+        except Exception as _se:
+            print(f"[CLEAR] Supabase delete error: {_se}")
     print(f"[CLEAR] {count} trades force closed, state reset")
     return {"status": "ok", "trades_force_closed": count}
