@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MEXC Bounce Scanner</title>
+  <style>
+    :root {
+      --bg:      #0d0f14;
+      --surface: #161920;
+      --card:    #1c2030;
+      --border:  #2a2f3e;
+      --text:    #e2e8f0;
+      --muted:   #7b8499;
+      --accent:  #f97316;   /* orange — MEXC brand */
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --yellow:  #eab308;
+      --blue:    #3b82f6;
+      --radius:  6px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+
+    /* ── Header ── */
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .header-logo { font-weight: 700; font-size: 15px; color: var(--accent); white-space: nowrap; }
+    .header-logo span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+    .stat-pill { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 10px; font-size: 12px; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+    .stat-pill .label { color: var(--muted); }
+    .stat-pill .value { font-weight: 600; }
+    .paper-badge { background: #7c3aed22; border: 1px solid #7c3aed88; color: #a78bfa; border-radius: var(--radius); padding: 3px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
+    .live-badge  { background: #16a34a22; border: 1px solid #16a34a88; color: #4ade80; border-radius: var(--radius); padding: 3px 8px; font-size: 11px; font-weight: 700; }
+    .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+    /* ── Market Health ── */
+    .health-bar { display: flex; gap: 10px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+    .health-label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .05em; margin-right: 4px; }
+    .health-pill { border-radius: 20px; padding: 3px 12px; font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+    .health-pill.RUN    { background: #16a34a33; color: #4ade80; border: 1px solid #16a34a66; }
+    .health-pill.CAUTION{ background: #ca8a0433; color: #fbbf24; border: 1px solid #ca8a0466; }
+    .health-pill.HALT   { background: #dc262633; color: #f87171; border: 1px solid #dc262666; }
+    .health-reason { color: var(--muted); font-size: 11px; }
+
+    /* ── J Bounce Map ── */
+    .map-section { padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    .map-title { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .05em; margin-bottom: 8px; }
+    .map-row { position: relative; height: 28px; margin-bottom: 6px; }
+    .map-row-label { font-size: 10px; color: var(--muted); position: absolute; left: 0; top: 7px; width: 36px; }
+    .map-bar { position: absolute; left: 44px; right: 0; top: 8px; height: 8px; background: var(--border); border-radius: 4px; }
+    .map-zone-low  { position: absolute; left: 0%;  width: 20%; height: 100%; background: #22c55e22; border-radius: 4px 0 0 4px; }
+    .map-zone-high { position: absolute; left: 80%; width: 20%; height: 100%; background: #ef444422; border-radius: 0 4px 4px 0; }
+    .map-chip { position: absolute; top: -9px; transform: translateX(-50%); background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; font-size: 9px; font-weight: 700; white-space: nowrap; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 0; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .tab { padding: 8px 14px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; user-select: none; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-badge { background: var(--accent); color: #000; border-radius: 10px; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-left: 4px; }
+
+    /* ── Main content ── */
+    .content { padding: 12px 16px; }
+    .pair-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+
+    /* ── Pair card ── */
+    .pair-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; transition: border-color .15s; }
+    .pair-card:hover { border-color: var(--accent); }
+    .pair-card.signal-short { border-color: #ef444488; }
+    .pair-card.signal-long  { border-color: #22c55e88; }
+
+    .card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+    .card-symbol { font-weight: 700; font-size: 13px; }
+    .card-arrow  { font-size: 11px; }
+    .card-arrow.bull { color: var(--green); }
+    .card-arrow.bear { color: var(--red); }
+    .card-arrow.neutral { color: var(--muted); }
+    .gate-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+    .gate-dot.pass { background: var(--green); }
+    .gate-dot.fail { background: var(--border); }
+    .card-price  { font-weight: 600; font-size: 12px; margin-left: auto; }
+    .card-change { font-size: 11px; margin-left: 4px; }
+    .card-change.pos { color: var(--green); }
+    .card-change.neg { color: var(--red); }
+
+    .card-meta { display: flex; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 6px; flex-wrap: wrap; }
+    .card-meta span { white-space: nowrap; }
+
+    .mini-bar-wrap { margin-bottom: 4px; }
+    .mini-bar-label { font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .mini-bar-track { height: 4px; background: var(--border); border-radius: 2px; position: relative; overflow: hidden; }
+    .mini-bar-fill  { height: 100%; border-radius: 2px; transition: width .3s; }
+    .mini-bar-fill.rsi  { background: var(--blue); }
+    .mini-bar-fill.bid  { background: var(--green); }
+    .mini-bar-fill.ask  { background: var(--red); }
+
+    .readiness-pill { display: inline-block; border-radius: 12px; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: .04em; margin-top: 5px; }
+    .readiness-pill.ready    { background: #16a34a44; color: #4ade80; border: 1px solid #16a34a88; }
+    .readiness-pill.near     { background: #ca8a0444; color: #fbbf24; border: 1px solid #ca8a0488; }
+    .readiness-pill.partial  { background: #1d4ed844; color: #93c5fd; border: 1px solid #1d4ed888; }
+    .readiness-pill.scanning { background: var(--border); color: var(--muted); border: 1px solid var(--border); }
+    .readiness-pill.div      { background: #7c3aed44; color: #a78bfa; border: 1px solid #7c3aed88; }
+
+    /* ── Alerts / Log tab tables ── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th { background: var(--surface); color: var(--muted); font-weight: 600; padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 11px; letter-spacing: .04em; }
+    .data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border)22; }
+    .data-table tr:hover td { background: var(--surface); }
+    .dir-short { color: var(--red);   font-weight: 700; }
+    .dir-long  { color: var(--green); font-weight: 700; }
+    .pnl-pos   { color: var(--green); font-weight: 700; }
+    .pnl-neg   { color: var(--red);   font-weight: 700; }
+
+    /* ── Positions ── */
+    .position-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+    .position-header { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .position-symbol { font-weight: 700; font-size: 14px; }
+    .position-dir    { font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .position-dir.short { background: #ef444422; color: var(--red); }
+    .position-dir.long  { background: #22c55e22; color: var(--green); }
+    .position-tier { color: var(--muted); font-size: 11px; }
+    .position-pnl  { margin-left: auto; font-weight: 700; font-size: 14px; }
+    .position-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; }
+    .level-box { background: var(--surface); border-radius: 4px; padding: 5px 8px; }
+    .level-box .lbl { color: var(--muted); font-size: 10px; }
+    .level-box .val { font-weight: 600; margin-top: 2px; }
+    .tp1-badge { display: inline-block; background: #22c55e33; color: #4ade80; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+    .position-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .btn { border: none; border-radius: var(--radius); padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-close     { background: #ef4444; color: #fff; }
+    .btn-force     { background: #dc2626; color: #fff; }
+    .btn-mexc-long { background: var(--green); color: #000; }
+    .btn-mexc-short{ background: var(--red);   color: #fff; }
+
+    /* ── Overlay ── */
+    .overlay { display: none; position: fixed; inset: 0; background: #000b; z-index: 100; align-items: flex-end; }
+    .overlay.open { display: flex; }
+    .overlay-sheet { background: var(--surface); border-top: 2px solid var(--accent); border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; margin: auto; padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .overlay-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+    .overlay-sym { font-size: 22px; font-weight: 800; }
+    .overlay-state { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .overlay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .overlay-stat { background: var(--card); border-radius: var(--radius); padding: 10px; }
+    .overlay-stat .lbl { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+    .overlay-stat .val { font-size: 16px; font-weight: 700; }
+    .overlay-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .overlay-close-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+
+    /* ── Perf panel ── */
+    .perf-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+    .perf-title { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .05em; margin-bottom: 10px; }
+    .perf-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+    .perf-stat  { background: var(--surface); border-radius: var(--radius); padding: 8px 10px; }
+    .perf-stat .lbl { font-size: 10px; color: var(--muted); }
+    .perf-stat .val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+
+    /* ── Cooldown list ── */
+    .cooldown-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--card); border-radius: var(--radius); margin-bottom: 6px; }
+    .cd-sym  { font-weight: 700; width: 80px; }
+    .cd-dir  { width: 50px; font-size: 11px; }
+    .cd-bar-wrap { flex: 1; }
+    .cd-bar  { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .cd-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+    .cd-time { font-size: 11px; color: var(--muted); width: 45px; text-align: right; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+  </head>
+  <body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <div class="header">
+    <div class="header-logo">🟠 MEXC BOUNCE<span>SCANNER</span></div>
+    <div class="stat-pill"><span class="label">P&L</span><span class="value" id="hdr-pnl">$0.00</span></div>
+    <div class="stat-pill"><span class="label">Margin</span><span class="value" id="hdr-margin">$0</span></div>
+    <div class="stat-pill"><span class="label">Pos</span><span class="value" id="hdr-pos">0</span></div>
+    <div class="stat-pill"><span class="label">Scans</span><span class="value" id="hdr-scans">0</span></div>
+    <div class="stat-pill"><span class="label">Session</span><span class="value" id="hdr-session">—</span></div>
+    <div class="header-right">
+      <span id="mode-badge" class="paper-badge">PAPER</span>
+    </div>
+  </div>
+
+  <!-- ── Market Health ───────────────────────────────────────────────────────── -->
+  <div class="health-bar">
+    <span class="health-label">MARKET HEALTH</span>
+    <span class="health-pill CAUTION" id="health-short">SHORT: CAUTION</span>
+    <span class="health-reason" id="health-short-reason"></span>
+    <span style="margin: 0 4px; color: var(--border)">|</span>
+    <span class="health-pill CAUTION" id="health-long">LONG: CAUTION</span>
+    <span class="health-reason" id="health-long-reason"></span>
+    <span class="health-reason" id="health-stats" style="margin-left:auto"></span>
+  </div>
+
+  <!-- ── J Bounce Map ────────────────────────────────────────────────────────── -->
+  <div class="map-section">
+    <div class="map-title">J BOUNCE MAP</div>
+    <div class="map-row">
+      <div class="map-row-label">J15M</div>
+      <div class="map-bar" id="map-15m">
+        <div class="map-zone-low"></div>
+        <div class="map-zone-high"></div>
+      </div>
+    </div>
+    <div class="map-row">
+      <div class="map-row-label">J1H</div>
+      <div class="map-bar" id="map-1h">
+        <div class="map-zone-low"></div>
+        <div class="map-zone-high"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tabs ────────────────────────────────────────────────────────────────── -->
+  <div class="tabs">
+    <div class="tab active" data-tab="all">ALL</div>
+    <div class="tab" data-tab="short">BOUNCE SHORT <span class="tab-badge" id="badge-short">0</span></div>
+    <div class="tab" data-tab="long">BOUNCE LONG <span class="tab-badge" id="badge-long">0</span></div>
+    <div class="tab" data-tab="alerts">ALERTS <span class="tab-badge" id="badge-alerts">0</span></div>
+    <div class="tab" data-tab="positions">POSITIONS <span class="tab-badge" id="badge-pos">0</span></div>
+    <div class="tab" data-tab="cooldown">COOLDOWN</div>
+    <div class="tab" data-tab="log">LOG</div>
+  </div>
+
+  <!-- ── Content ─────────────────────────────────────────────────────────────── -->
+  <div class="content">
+
+    <!-- ALL / SHORT / LONG -->
+    <div id="tab-all">
+      <div class="pair-grid" id="pair-grid"></div>
+    </div>
+    <div id="tab-short"  style="display:none"><div class="pair-grid" id="pair-grid-short"></div></div>
+    <div id="tab-long"   style="display:none"><div class="pair-grid" id="pair-grid-long"></div></div>
+
+    <!-- ALERTS -->
+    <div id="tab-alerts" style="display:none">
+      <table class="data-table">
+        <thead><tr>
+          <th>Time</th><th>Symbol</th><th>Dir</th><th>Tier</th><th>Entry</th>
+          <th>SL</th><th>TP1</th><th>TP2</th><th>ADX</th><th>Session</th>
+        </tr></thead>
+        <tbody id="alerts-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- POSITIONS -->
+    <div id="tab-positions" style="display:none">
+      <div id="positions-list"></div>
+    </div>
+
+    <!-- COOLDOWN -->
+    <div id="tab-cooldown" style="display:none">
+      <div id="cooldown-list"></div>
+    </div>
+
+    <!-- LOG -->
+    <div id="tab-log" style="display:none">
+      <div class="perf-panel" id="perf-panel"></div>
+      <table class="data-table">
+        <thead><tr>
+          <th>Opened</th><th>Symbol</th><th>Dir</th><th>Entry</th><th>Exit</th>
+          <th>Reason</th><th>PnL</th><th>Session</th>
+        </tr></thead>
+        <tbody id="log-tbody"></tbody>
+      </table>
+      <div style="margin-top:12px">
+        <a href="/api/tradelog" style="font-size:11px">📅 Download CSV</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Symbol Overlay ───────────────────────────────────────────────────────── -->
+  <div class="overlay" id="overlay" onclick="if(event.target===this)closeOverlay()">
+    <div class="overlay-sheet">
+      <div class="overlay-handle"></div>
+      <button class="overlay-close-btn" onclick="closeOverlay()">&times;</button>
+      <div class="overlay-sym" id="ov-sym">—</div>
+      <div class="overlay-state" id="ov-state">WATCHING</div>
+      <div class="overlay-grid" id="ov-grid"></div>
+      <div id="ov-trade-info"></div>
+      <div class="overlay-actions" id="ov-actions"></div>
+    </div>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+  </body>
+  </html>
+  
