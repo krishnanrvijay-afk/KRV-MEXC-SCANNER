@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-# ── Supabase persistence ───────────────────────────────────────────────────────
+# ââ Supabase persistence âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
@@ -11,7 +11,7 @@ SCAN_INTERVAL_SECONDS  = 30
 PRICE_INTERVAL_SECONDS = 8
 PAPER_MODE             = True
 
-# ── Live trading safety ────────────────────────────────────────────────────────
+# ââ Live trading safety ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 # When PAPER_MODE is False and LIVE_MANUAL_ENTRY_ONLY is True, the scanner will
 # never automatically open a live exchange position. Alerts fire and the overlay
 # updates normally but all live trade entry requires deliberate human action via
@@ -26,10 +26,10 @@ J15M_LONG_GATE   = 20
 J1H_SHORT_MIN    = 60
 J1H_LONG_MAX     = 40
 
-RSI15M_SHORT_MIN = 65
-RSI15M_LONG_MAX  = 35
+RSI15M_SHORT_MIN = 60
+RSI15M_LONG_MAX  = 40
 
-DEPTH_GATE_PCT   = 60
+DEPTH_GATE_PCT   = 55
 
 ATR_SL_MULTIPLIER = 1.0
 
