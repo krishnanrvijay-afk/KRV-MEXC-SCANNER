@@ -58,57 +58,48 @@ async def _tg_post(text: str):
 
 
 async def send_alert_telegram(alert: dict):
-    sym  = alert["symbol"]
-    disp = sym.replace("_USDT", "")
-    d    = alert["direction"]
-    tier = alert["tier"]
-    lev  = alert["leverage"]
-    price = alert["price"]
-    sl    = alert["sl_price"]
-    tp1   = alert["tp1_price"]
-    tp2   = alert["tp2_price"]
-    j15m  = alert["j15m"]
-    j1h   = alert["j1h"]
-    rsi   = alert["rsi15m"]
-    adx   = alert["adx"]
-    sess  = alert.get("session", "")
-    arrow = "▼" if d == "SHORT" else "▲"
-    msg = (
-        f"U0001f7e0 <b>MEXC BOUNCE</b>
-"
-        f"{arrow} <b>{disp} {d}</b> [{tier} {lev}x]
-"
-        f"Entry: <code>{price}</code>
-"
-        f"SL:    <code>{sl}</code>
-"
-        f"TP1:   <code>{tp1}</code>  (50% close)
-"
-        f"TP2:   <code>{tp2}</code>  (50% close)
-"
-        f"
-"
-        f"J15M: {j15m:.1f}  J1H: {j1h:.1f}  RSI: {rsi:.1f}  ADX: {adx:.1f}
-"
-        f"Session: {sess}  |  Margin: $" + str(MARGIN_PER_TRADE) + "
-"
-        f"#MEXC_BOUNCE #{disp} #{d}"
-    )
-    await _tg_post(msg)
+      sym   = alert["symbol"]
+      disp  = sym.replace("_USDT", "")
+      d     = alert["direction"]
+      tier  = alert["tier"]
+      lev   = alert["leverage"]
+      price = alert["price"]
+      sl    = alert["sl_price"]
+      tp1   = alert["tp1_price"]
+      tp2   = alert["tp2_price"]
+      j15m  = alert["j15m"]
+      j1h   = alert["j1h"]
+      rsi   = alert["rsi15m"]
+      adx   = alert["adx"]
+      sess  = alert.get("session", "")
+      arrow = chr(9660) if d == "SHORT" else chr(9650)
+      NL    = chr(10)
+      msg = (
+          chr(128992) + " <b>MEXC BOUNCE</b>" + NL
+          + f"{arrow} <b>{disp} {d}</b> [{tier} {lev}x]" + NL
+          + f"Entry: <code>{price}</code>" + NL
+          + f"SL:    <code>{sl}</code>" + NL
+          + f"TP1:   <code>{tp1}</code>  (50% close)" + NL
+          + f"TP2:   <code>{tp2}</code>  (50% close)" + NL
+          + NL
+          + f"J15M: {j15m:.1f}  J1H: {j1h:.1f}  RSI: {rsi:.1f}  ADX: {adx:.1f}" + NL
+          + f"Session: {sess}  |  Margin: $" + str(MARGIN_PER_TRADE) + NL
+          + f"#MEXC_BOUNCE #{disp} #{d}"
+      )
+      await _tg_post(msg)
 
 
 async def _reminder_task(trade_id: str, sym: str, d: str, entry: float, sl: float, tp1: float, tp2: float):
-    await asyncio.sleep(1800)
-    disp  = sym.replace("_USDT", "")
-    arrow = "▼" if d == "SHORT" else "▲"
-    msg = (
-        f"U0001f7e0 <b>MEXC BOUNCE — 30m REMINDER</b>
-"
-        f"{arrow} <b>{disp} {d}</b>  still open
-"
-        f"Entry: {entry}  SL: {sl}  TP1: {tp1}  TP2: {tp2}"
-    )
-    await _tg_post(msg)
+      await asyncio.sleep(1800)
+      disp  = sym.replace("_USDT", "")
+      arrow = chr(9660) if d == "SHORT" else chr(9650)
+      NL    = chr(10)
+      msg = (
+          chr(128992) + " <b>MEXC BOUNCE — 30m REMINDER</b>" + NL
+          + f"{arrow} <b>{disp} {d}</b>  still open" + NL
+          + f"Entry: {entry}  SL: {sl}  TP1: {tp1}  TP2: {tp2}"
+      )
+      await _tg_post(msg)
 
 
 def start_reminder(trade_id: str, sym: str, d: str, entry: float, sl: float, tp1: float, tp2: float):
@@ -124,28 +115,23 @@ def cancel_reminder(trade_id: str):
 
 
 async def send_exit_telegram(trade: dict, reason: str, pnl: float):
-    sym  = trade["symbol"]
-    disp = sym.replace("_USDT", "")
-    d    = trade["direction"]
-    entry = trade["entry_price"]
-    exit_p = trade.get("exit_price", trade.get("close_price", 0))
-    pnl_sign = "+" if pnl >= 0 else ""
-    emoji = "✅" if pnl >= 0 else "❌"
-    msg = (
-        f"U0001f7e0 <b>MEXC BOUNCE — EXIT</b> {emoji}
-"
-        f"<b>{disp} {d}</b>  [{reason}]
-"
-        f"Entry: {entry}  Exit: {exit_p}
-"
-        f"PnL: <b>{pnl_sign}{pnl:.2f} USDT</b>
-"
-        f"#MEXC_BOUNCE #{disp}"
-    )
-    await _tg_post(msg)
+      sym   = trade["symbol"]
+      disp  = sym.replace("_USDT", "")
+      d     = trade["direction"]
+      entry = trade["entry_price"]
+      exit_p = trade.get("exit_price", trade.get("close_price", 0))
+      pnl_sign = "+" if pnl >= 0 else ""
+      ok_emoji = chr(9989) if pnl >= 0 else chr(10060)
+      NL    = chr(10)
+      msg = (
+          chr(128992) + " <b>MEXC BOUNCE — EXIT</b> " + ok_emoji + NL
+          + f"<b>{disp} {d}</b>  [{reason}]" + NL
+          + f"Entry: {entry}  Exit: {exit_p}" + NL
+          + f"PnL: <b>{pnl_sign}{pnl:.2f} USDT</b>" + NL
+          + f"#MEXC_BOUNCE #{disp}"
+      )
+      await _tg_post(msg)
 
-
-# ── Supabase ───────────────────────────────────────────────────────────────────
 
 def _get_supabase():
     if not SUPABASE_URL or not SUPABASE_KEY:
