@@ -113,10 +113,6 @@ class AppState:
             trailing_sl    = t.get("trail_stop")        # set by exit monitor each cycle after TP1
             trail_best_prc = t.get("trail_best_price")  # initialised at TP1, updated each cycle
 
-
-
-
-
             trades_out[k] = {
                 **t,
                 "current_price":  current,
@@ -125,7 +121,7 @@ class AppState:
                 "elapsed_s":      int(time.time()) - t.get("opened_at", int(time.time())),
                 "trailing_sl":    trailing_sl,
                 "trail_best_price": trail_best_prc,
-
+            }
         pair_states_out = []
         for ps in self.pair_states:
             sym = ps.get("symbol", "")
