@@ -1187,19 +1187,70 @@ function renderPerfPanel(log) {
 }
 
 // ── Log tab ───────────────────────────────────────────────────────────────────
+// ── Date filter helpers ───────────────────────────────────────────────────────
+function _localDateStr(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+function _getYesterday() {
+  const d = new Date(); d.setDate(d.getDate()-1); return _localDateStr(d);
+}
+
+function clearDateFilter() {
+  const yd = _getYesterday();
+  const f  = document.getElementById('log-date-from');
+  const t  = document.getElementById('log-date-to');
+  if (f) f.value = yd;
+  if (t) t.value = yd;
+  renderLogTab();
+}
+
 function renderLogTab() {
   const log = STATE.trade_log || [];
-  document.getElementById('log-count').textContent = `${log.length} trade${log.length!==1?'s':''}`;
+
+  // Initialise date inputs to yesterday on first paint
+  const fromEl = document.getElementById('log-date-from');
+  const toEl   = document.getElementById('log-date-to');
+  if (fromEl && !fromEl.dataset.init) {
+    const yd = _getYesterday();
+    fromEl.value       = yd;
+    toEl.value         = yd;
+    fromEl.dataset.init = '1';
+    toEl.dataset.init   = '1';
+  }
+
+  // Compute epoch range from local date strings
+  const fromStr = fromEl ? fromEl.value : '';
+  const toStr   = toEl   ? toEl.value   : '';
+  const fromMs  = fromStr ? new Date(fromStr + 'T00:00:00').getTime() : null;
+  const toMs    = toStr   ? new Date(toStr   + 'T23:59:59').getTime() : null;
+
+  // Filter trade log by close timestamp
+  const filtered = log.filter(r => {
+    const ts = (r.timestamp_closed || 0) * 1000;
+    if (fromMs !== null && ts < fromMs) return false;
+    if (toMs   !== null && ts > toMs)   return false;
+    return true;
+  });
+
+  const countTxt = filtered.length === log.length
+    ? `${log.length} trade${log.length!==1?'s':''}`
+    : `${filtered.length} of ${log.length} trade${log.length!==1?'s':''}`;
+  document.getElementById('log-count').textContent = countTxt;
   renderStatsPanel(log);
   renderPerfPanel(log);
 
-  if (!log.length) {
+  if (!filtered.length) {
     document.getElementById('log-body').className = 'log-empty';
-    document.getElementById('log-body').innerHTML = 'No closed trades yet';
+    document.getElementById('log-body').innerHTML = log.length
+      ? 'No trades in selected date range'
+      : 'No closed trades yet';
     return;
   }
 
-  const rows = [...log].reverse().map(r => {
+  const rows = [...filtered].reverse().map(r => {
     const reasonCls = r.exit_reason === 'TP1'  ? 'reason-tp1'
                     : r.exit_reason === 'TP2'  ? 'reason-tp2'
                     : r.exit_reason === 'SL'   ? 'reason-sl' : 'reason-manual';
@@ -1220,7 +1271,7 @@ function renderLogTab() {
       <td style="color:#ff4444;">${fmtPrice(r.sl_price)}</td>
       <td style="color:#00ff88;">${fmtPrice(r.tp1_price)}</td>
       <td class="${reasonCls}">${r.exit_reason||'—'}</td>
-      <td style="color:${pnlColor};font-weight:700;">${(r.pnl_usd||0)>=0?'+':''}$${(r.pnl_usd||0).toFixed(2)}</td>
+      <td style="color:${pnlColor};font-weight:700;">${(r.pnl_usd||0)>=0?'+':''}${(r.pnl_usd||0).toFixed(2)}</td>
       <td style="color:${rColor};font-weight:700;">${(r.r_value||0)>=0?'+':''}${(r.r_value||0).toFixed(2)}R</td>
       <td style="color:#555;">${openTime}</td>
       <td style="color:#555;">${closeTime}</td>

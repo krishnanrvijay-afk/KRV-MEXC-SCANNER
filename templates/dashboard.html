@@ -426,6 +426,11 @@
   .lb-csv   { background: rgba(0,255,136,0.08); color: #00ff88; border-color: rgba(0,255,136,0.3); }
   .lb-clear { background: rgba(255,68,68,0.08);  color: #ff4444; border-color: rgba(255,68,68,0.3); }
   .log-count { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #555; margin-left: auto; }
+  .log-date-filter { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .log-date-label  { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #888; font-weight: 700; letter-spacing: 1px; }
+  .log-date-input  { background: #111; color: #fff; border: 1px solid rgba(255,170,0,0.4); border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 4px 8px; outline: none; color-scheme: dark; }
+  .log-date-input:focus { border-color: #ffaa00; }
+  .lb-date-clear   { background: rgba(255,170,0,0.08); color: #ffaa00; border-color: rgba(255,170,0,0.3); }
   .log-table-wrap { overflow-x: auto; }
   .log-table { width: 100%; border-collapse: collapse; }
   .log-table th { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 800; letter-spacing: 1px; color: #fff; text-transform: uppercase; padding: 6px 10px; border-bottom: 1px solid #1a1a1a; text-align: left; white-space: nowrap; }
@@ -669,6 +674,13 @@
     <button class="log-btn lb-csv"   onclick="exportCsv()">EXPORT CSV</button>
     <button class="log-btn lb-clear" onclick="clearLog()">CLEAR LOG</button>
     <span class="log-count" id="log-count">0 trades</span>
+  </div>
+  <div class="log-date-filter">
+    <label class="log-date-label">FROM</label>
+    <input type="date" id="log-date-from" class="log-date-input" oninput="renderLogTab()">
+    <label class="log-date-label">TO</label>
+    <input type="date" id="log-date-to" class="log-date-input" oninput="renderLogTab()">
+    <button class="log-btn lb-date-clear" onclick="clearDateFilter()">CLEAR</button>
   </div>
   <div id="stats-panel"></div>
   <div class="log-table-wrap">
