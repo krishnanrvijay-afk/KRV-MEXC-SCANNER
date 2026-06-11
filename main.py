@@ -225,13 +225,14 @@ def _get_supabase() -> Optional[Client]:
 
 
 def _save_state():
-    """Upsert full scanner state to Supabase scanner_state table (row id=1)."""
+    """Upsert full scanner state to Supabase scanner_state table (MEXC row id=2)."""
     sb = _get_supabase()
     if sb is None:
         return
     try:
         data = {
-            "id":                     1,
+            "id":                     2,
+            "exchange":                "MEXC",
             "saved_date":             datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "open_trades":            app_state.open_trades,
             "margin_deployed":        app_state.margin_deployed,
@@ -293,7 +294,7 @@ def _load_state():
             print(f"[RESTORE] trade log: {len(log_rows.data)} entries restored")
 
         # ── Scanner state ──────────────────────────────────────────────────────
-        result = sb.table("scanner_state").select("*").eq("id", 1).execute()
+        result = sb.table("scanner_state").select("*").eq("id", 2).execute()
         if not result.data:
             print("[RESTORE] No state row found — starting fresh")
             return
@@ -324,6 +325,17 @@ def _load_state():
             print(f"[RESTORE] {trade.get('symbol')} {trade.get('direction')} "
                   f"entry={trade.get('entry_price')} sl={trade.get('sl_price')} "
                   f"tp1={trade.get('tp1_price')} restored")
+
+        # ── Sanitize foreign-scanner ghost positions ────────────────────────────
+        _foreign_keys = [
+            k for k, t in list(app_state.open_trades.items())
+            if t.get("symbol") not in PAIRS
+        ]
+        for _fk in _foreign_keys:
+            _ft = app_state.open_trades.pop(_fk)
+            print(f"[SANITIZE] dropped foreign position {_ft.get('symbol')}")
+        if _foreign_keys:
+            print(f"[SANITIZE] {len(_foreign_keys)} foreign position(s) removed")
 
         # ── Restore cooldowns (filter expired) ────────────────────────────────
         now     = time.time()
