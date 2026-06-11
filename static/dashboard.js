@@ -247,7 +247,7 @@ function renderCards() {
     return true;
   });
 
-  grid.innerHTML = filtered.map(p => buildCard(p, alerts, trades, changes)).join('')
+  grid.innerHTML = filtered.map(p => { try { return buildCard(p, alerts, trades, changes); } catch(e) { console.error('[buildCard] ' + (p?.symbol||'?'), e); return ''; } }).join('')
     || '<div style="padding:40px;color:#333;text-align:center;grid-column:1/-1;">No pairs match filter</div>';
 }
 
@@ -260,10 +260,10 @@ function buildCard(p, alerts, trades, changes) {
   const bidPct = p.bid_pct || 0;
   const askPct = p.ask_pct || 0;
   const adx1h  = p.adx1h   || 0;
-  const stochK     = p.stoch_k      || 0;
-  const stochD     = p.stoch_d      || 0;
-  const stochKPrev = p.stoch_k_prev || 0;
-  const stochDPrev = p.stoch_d_prev || 0;
+  const stochK     = p.stoch_k      ?? null;
+  const stochD     = p.stoch_d      ?? null;
+  const stochKPrev = p.stoch_k_prev ?? null;
+  const stochDPrev = p.stoch_d_prev ?? null;
   const cdS    = p.cooldown_short || 0;
   const cdL    = p.cooldown_long  || 0;
   const inTrade = p.in_trade;
@@ -282,8 +282,8 @@ function buildCard(p, alerts, trades, changes) {
                  : '#ffffff';
 
   // Gate counts
-  const shortGates = [j15m > 80, j1h > 60, stochK > 75 && stochK < stochD, askPct >= 55];
-  const longGates  = [j15m < 20, j1h < 40, stochK < 25 && stochK > stochD, bidPct >= 55];
+  const shortGates = [j15m > 80, j1h > 60, stochK !== null && stochD !== null && stochK > 75 && stochK < stochD, askPct >= 55];
+  const longGates  = [j15m < 20, j1h < 40, stochK !== null && stochD !== null && stochK < 25 && stochK > stochD, bidPct >= 55];
   const shortCount = shortGates.filter(Boolean).length;
   const longCount  = longGates.filter(Boolean).length;
   const shortFull  = shortCount === 4;
@@ -356,49 +356,53 @@ function buildCard(p, alerts, trades, changes) {
   // ── Confluence mini bars (RSI + Depth) — shown only on confluence cards ───────
   let confBars = '';
   if (isConf) {
-    const depthPct   = confIsLong ? bidPct : askPct;
-    const depthLabel = confIsLong ? 'BID' : 'ASK';
-    const stochPass   = confIsLong ? longGates[2] : shortGates[2];
-    const stochKPct2  = Math.min(99, Math.max(0, stochK));
-    const stochDPct2  = Math.min(99, Math.max(0, stochD));
-    const stochKCol   = confIsLong ? (stochK < 25 ? '#00e676' : '#555') : (stochK > 75 ? '#ff3d57' : '#555');
-    const stochDotCls = stochPass ? (confIsLong ? 'long-pass' : 'short-pass') : (confIsLong ? 'long-fail' : 'short-fail');
-    const stochEcl    = Math.abs(stochK - stochD) < 5;
-    const stochDBrd   = stochEcl ? '1px solid #00ff88' : '1px solid rgba(136,136,136,0.7)';
-    const stochDGlw   = stochEcl ? '0 0 5px rgba(0,255,136,0.4)' : 'none';
-    const dptDotCls  = depthPass ? (confIsLong ? 'long-pass' : 'short-pass') : (confIsLong ? 'long-fail' : 'short-fail');
-    const fillPct    = Math.min(100, Math.max(0, depthPct));
-    const fillColor  = confIsLong
-      ? (depthPass ? 'rgba(0,230,118,0.7)' : 'rgba(0,230,118,0.25)')
-      : (depthPass ? 'rgba(255,61,87,0.7)'  : 'rgba(255,61,87,0.25)');
-    const fillStyle  = confIsLong
-      ? `left:0;width:${fillPct}%;background:${fillColor}`
-      : `right:0;width:${fillPct}%;background:${fillColor}`;
-    const gateLinePct = confIsLong ? 55 : 45;
+      const depthPct   = confIsLong ? bidPct : askPct;
+      const depthLabel = confIsLong ? 'BID' : 'ASK';
+      const depthPass   = confIsLong ? (bidPct >= 55) : (askPct >= 55);
+      const stochPass   = confIsLong ? longGates[2] : shortGates[2];
+      const stochKCol   = stochK !== null ? (confIsLong ? (stochK < 25 ? '#00e676' : '#555') : (stochK > 75 ? '#ff3d57' : '#555')) : '#555';
+      const stochDotCls = stochPass ? (confIsLong ? 'long-pass' : 'short-pass') : (confIsLong ? 'long-fail' : 'short-fail');
+      const dptDotCls  = depthPass ? (confIsLong ? 'long-pass' : 'short-pass') : (confIsLong ? 'long-fail' : 'short-fail');
+      const fillPct    = Math.min(100, Math.max(0, depthPct));
+      const fillColor  = confIsLong
+        ? (depthPass ? 'rgba(0,230,118,0.7)' : 'rgba(0,230,118,0.25)')
+        : (depthPass ? 'rgba(255,61,87,0.7)'  : 'rgba(255,61,87,0.25)');
+      const fillStyle  = confIsLong
+        ? `left:0;width:${fillPct}%;background:${fillColor}`
+        : `right:0;width:${fillPct}%;background:${fillColor}`;
+      const gateLinePct = confIsLong ? 55 : 45;
 
-    confBars = `<div class="cbar-row">
-      <span class="gc-dot cbar-dot ${stochDotCls}"></span>
-      <span class="cbar-label">STOCH</span>
-      <div class="cbar-track" style="position:relative">
-        <div class="cbar-zg" style="width:25%"></div>
-        <div class="cbar-zr" style="left:75%;width:25%"></div>
-        <div class="cbar-thresh cbar-thresh-l" style="left:25%"></div>
-        <div class="cbar-thresh cbar-thresh-r" style="left:75%"></div>
-        <div class="cbar-cursor" style="left:${stochKPct2}%;background:${stochKCol};box-shadow:0 0 5px ${stochKCol}"></div>
-        <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${stochDPct2}%;width:10px;height:10px;border-radius:2px;border:${stochDBrd};background:transparent;pointer-events:none;box-shadow:${stochDGlw}"></div>
+      const stochBarHtml = stochK !== null && stochD !== null ? (() => {
+        const stochKPct2 = Math.min(99, Math.max(0, stochK));
+        const stochDPct2 = Math.min(99, Math.max(0, stochD));
+        const stochEcl   = Math.abs(stochK - stochD) < 5;
+        const stochDBrd  = stochEcl ? '1px solid #00ff88' : '1px solid rgba(136,136,136,0.7)';
+        const stochDGlw  = stochEcl ? '0 0 5px rgba(0,255,136,0.4)' : 'none';
+        return `<div class="cbar-track" style="position:relative">
+          <div class="cbar-zg" style="width:25%"></div>
+          <div class="cbar-zr" style="left:75%;width:25%"></div>
+          <div class="cbar-thresh cbar-thresh-l" style="left:25%"></div>
+          <div class="cbar-thresh cbar-thresh-r" style="left:75%"></div>
+          <div class="cbar-cursor" style="left:${stochKPct2}%;background:${stochKCol};box-shadow:0 0 5px ${stochKCol}"></div>
+          <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${stochDPct2}%;width:10px;height:10px;border-radius:2px;border:${stochDBrd};background:transparent;pointer-events:none;box-shadow:${stochDGlw}"></div>
+        </div><span style="font-size:9px;color:#555;margin-left:3px">${rsi15m.toFixed(0)}</span>`;
+      })() : `<span style="color:#555;font-size:11px;margin-left:6px">—</span><span style="font-size:9px;color:#555;margin-left:3px">${rsi15m.toFixed(0)}</span>`;
+
+      confBars = `<div class="cbar-row">
+        <span class="gc-dot cbar-dot ${stochDotCls}"></span>
+        <span class="cbar-label">STOCH</span>
+        ${stochBarHtml}
       </div>
-      <span style="font-size:9px;color:#555;margin-left:3px">${rsi15m.toFixed(0)}</span>
-    </div>
-    <div class="cbar-row">
-      <span class="gc-dot cbar-dot ${dptDotCls}"></span>
-      <span class="cbar-label">${depthLabel}</span>
-      <div class="cbar-track">
-        <div class="cbar-fill" style="${fillStyle}"></div>
-        <div class="cbar-thresh" style="left:${gateLinePct}%;border-color:rgba(255,170,0,0.5)"></div>
-      </div>
-      <span class="cbar-val">${depthPct.toFixed(0)}%</span>
-    </div>`;
-  }
+      <div class="cbar-row">
+        <span class="gc-dot cbar-dot ${dptDotCls}"></span>
+        <span class="cbar-label">${depthLabel}</span>
+        <div class="cbar-track">
+          <div class="cbar-fill" style="${fillStyle}"></div>
+          <div class="cbar-thresh" style="left:${gateLinePct}%;border-color:rgba(255,170,0,0.5)"></div>
+        </div>
+        <span class="cbar-val">${depthPct.toFixed(0)}%</span>
+      </div>`;
+    }
 
   // ── Pills / readiness ─────────────────────────────────────────────────────────
   let pills = '';
@@ -452,7 +456,7 @@ function buildCard(p, alerts, trades, changes) {
 function dirRow(direction, stochK, stochD, rsi15m, depthPct) {
   const isLong     = direction === 'LONG';
   const rowCls     = isLong ? 'long-row' : 'short-row';
-  const depthLabel = isLong ? 'BID%' : 'ASK%';
+  const stochColor = stochK === null ? 'grey' : (isLong ? (stochK < 25 ? 'green' : 'grey') : (stochK > 75 ? 'red' : 'grey'));
   const stochColor = isLong ? (stochK < 25 ? 'green' : 'grey') : (stochK > 75 ? 'red' : 'grey');
   const depthColor = depthPct >= 55 ? (isLong ? 'green' : 'red') : 'grey';
 
@@ -460,7 +464,7 @@ function dirRow(direction, stochK, stochD, rsi15m, depthPct) {
     <div class="dir-vals">
       <div class="dv-item">
         <span class="dv-label">STOCH</span>
-        <span class="dv-val ${stochColor}">${stochK.toFixed(0)}/${stochD.toFixed(0)}</span><span style="font-size:9px;color:#555;margin-left:3px">RSI${rsi15m.toFixed(0)}</span>
+        <span class="dv-val ${stochColor}">${stochK !== null && stochD !== null ? stochK.toFixed(0) + '/' + stochD.toFixed(0) : '—'}</span><span style="font-size:9px;color:#555;margin-left:3px">RSI${rsi15m.toFixed(0)}</span>
       </div>
       <div class="dv-item">
         <span class="dv-label">${depthLabel}</span>
@@ -1456,9 +1460,9 @@ function _ovGateBarsHtml(d, dir) {
   const j15m    = d.j15m    || 0;
   const j1h     = d.j1h     || 0;
   const rsi     = d.rsi15m  || 0;
-  const stochK2    = d.stoch_k || 0;
-  const stochD2    = d.stoch_d || 0;
-  const stochKC2   = stochK2 < 25 ? '#00e676' : stochK2 > 75 ? '#ff3d57' : '#fff';
+  const stochK2    = d.stoch_k ?? null;
+  const stochD2    = d.stoch_d ?? null;
+  const stochKC2   = stochK2 === null ? '#fff' : (stochK2 < 25 ? '#00e676' : stochK2 > 75 ? '#ff3d57' : '#fff');
   const stochEcl2  = Math.abs(stochK2 - stochD2) < 5;
   const stochDBrd2 = stochEcl2 ? '1px solid #00ff88' : '1px solid rgba(136,136,136,0.7)';
   const stochDGlw2 = stochEcl2 ? '0 0 5px rgba(0,255,136,0.4)' : 'none';
@@ -1504,10 +1508,10 @@ function _ovGateBarsHtml(d, dir) {
         <div class="pov-gzg" style="width:25%"></div>
         <div class="pov-gzr" style="left:75%;width:25%"></div>
         <div class="pov-gth" style="left:25%"></div><div class="pov-gth" style="left:75%"></div>
-        <div class="pov-gcur" id="pov-gc-2k" style="left:${Math.min(99,stochK2).toFixed(1)}%;background:${stochKC2}"></div>
-        <div id="pov-gc-2d" style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${Math.min(99,stochD2).toFixed(1)}%;width:10px;height:10px;border-radius:2px;border:${stochDBrd2};background:transparent;pointer-events:none;box-shadow:${stochDGlw2}"></div>
+        ${stochK2 !== null ? `<div class="pov-gcur" id="pov-gc-2k" style="left:${Math.min(99,stochK2).toFixed(1)}%;background:${stochKC2}"></div>` : ''}
+        ${stochD2 !== null ? `<div id="pov-gc-2d" style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${Math.min(99,stochD2).toFixed(1)}%;width:10px;height:10px;border-radius:2px;border:${stochD2 !== null && Math.abs(stochK2-stochD2) < 5 ? '1px solid #00ff88' : '1px solid rgba(136,136,136,0.7)'};background:transparent;pointer-events:none;box-shadow:${stochD2 !== null && Math.abs(stochK2-stochD2) < 5 ? '0 0 5px rgba(0,255,136,0.4)' : 'none'}"></div>` : ''}
       </div>
-      <span class="pov-gv" id="pov-gv-2" style="color:${stochKC2}">${stochK2.toFixed(0)}/${stochD2.toFixed(0)}</span>
+      <span class="pov-gv" id="pov-gv-2" style="color:${stochKC2}">${stochK2 !== null && stochD2 !== null ? stochK2.toFixed(0) + '/' + stochD2.toFixed(0) : '—'}</span>
     </div>
     <div class="pov-gr" data-gi="rsi">
       <div class="pov-gd pov-gd-fail" style="opacity:0.25"></div>
@@ -1804,20 +1808,20 @@ function _ovUpdate(pn, d) {
     }
   });
   // STOCH row (gate 2): %K solid dot + eclipse %D square
-  const stochKU  = d.stoch_k || 0;
-  const stochDU  = d.stoch_d || 0;
-  const stochKCU = stochKU < 25 ? '#00e676' : stochKU > 75 ? '#ff3d57' : '#fff';
+  const stochKU  = d.stoch_k ?? null;
+  const stochDU  = d.stoch_d ?? null;
+  const stochKCU = stochKU === null ? '#fff' : (stochKU < 25 ? '#00e676' : stochKU > 75 ? '#ff3d57' : '#fff');
   const gc2k = document.getElementById('pov-gc-2k');
-  if (gc2k) { gc2k.style.left = `${Math.min(99, stochKU).toFixed(1)}%`; gc2k.style.background = stochKCU; }
+  if (gc2k && stochKU !== null) { gc2k.style.left = `${Math.min(99, stochKU).toFixed(1)}%`; gc2k.style.background = stochKCU; }
   const gc2d = document.getElementById('pov-gc-2d');
   if (gc2d) {
-    gc2d.style.left = `${Math.min(99, stochDU).toFixed(1)}%`;
-    const stochEclU = Math.abs(stochKU - stochDU) < 5;
-    gc2d.style.border    = stochEclU ? '1px solid #00ff88' : '1px solid rgba(136,136,136,0.7)';
-    gc2d.style.boxShadow = stochEclU ? '0 0 5px rgba(0,255,136,0.4)' : 'none';
-  }
+    if (stochDU !== null) { gc2d.style.left = `${Math.min(99, stochDU).toFixed(1)}%`; }
+    if (stochKU !== null && stochDU !== null) {
+      const stochEclU = Math.abs(stochKU - stochDU) < 5;
+      gc2d.style.border    = stochEclU ? '1px solid #00ff88' : '1px solid rgba(136,136,136,0.7)';
+      gc2d.style.boxShadow = stochEclU ? '0 0 5px rgba(0,255,136,0.4)' : 'none';
   const gv2 = document.getElementById('pov-gv-2');
-  if (gv2) { gv2.textContent = `${stochKU.toFixed(0)}/${stochDU.toFixed(0)}`; gv2.style.color = stochKCU; }
+  if (gv2 && stochKU !== null && stochDU !== null) { gv2.textContent = `${stochKU.toFixed(0)}/${stochDU.toFixed(0)}`; gv2.style.color = stochKCU; }
   const gd2 = document.getElementById('pov-gd-2');
   if (gd2) {
     gd2.className = dotPassCls(curGates[2]);
