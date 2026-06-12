@@ -504,7 +504,7 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
                 "mfe_r":            _mfe_r,
             }).execute()
         except Exception as _e:
-            print(f"[PERSIST] mexc_trade_log insert error: {_e}")
+            print(f"[TRADE LOG WRITE FAILED] {_e}")
 
 
 # ── Paper trade Supabase logging ─────────────────────────────────────────────
