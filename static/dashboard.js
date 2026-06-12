@@ -894,7 +894,7 @@ function buildPosCard(t, prices, pairStates) {
     <span class="pcv2-timer" id="${tid}">00:00:00</span>
   </div>
 
-  <div class="pcv2-sub">${lev}x · ${marginFmt} · ${openFmt}</div>
+  <div class="pcv2-sub">${lev}x · ${marginFmt} · ${openFmt}${t.session ? ' · <span style="color:#aaa;font-size:10px;letter-spacing:1px">' + t.session + '</span>' : ''}</div>
 
   <div class="pcv2-live">
     <span style="font-size:20px;color:${arrCol};line-height:1">${arrow}</span>
@@ -1261,6 +1261,59 @@ function renderPerfPanel(log) {
   '</div>';
 }
 
+// ── Session breakdown ───────────────────────────────────────────────────────
+function renderSessionPanel(log) {
+  var el = document.getElementById('session-panel');
+  if (!el) return;
+  if (!log.length) { el.innerHTML = ''; return; }
+  var sessions = ['ASIA', 'EU', 'US', 'OFF'];
+  var isWin = function(r) {
+    return r.exit_reason === 'TP1' || r.exit_reason === 'TP2' ||
+           r.exit_reason === 'TRAILBLAZER' || r.exit_reason === 'HC_PARTIAL_1.5R';
+  };
+  var isSL  = function(r) { return r.exit_reason === 'SL'; };
+  var cols  = { ASIA: '#4488ff', EU: '#00ff88', US: '#ff8800', OFF: '#888' };
+  var rows = sessions.map(function(sess) {
+    var trades = log.filter(function(r) { return r.session_opened === sess; });
+    if (!trades.length) return null;
+    var wins      = trades.filter(isWin);
+    var losses    = trades.filter(isSL);
+    var wr        = (wins.length / trades.length * 100);
+    var netPnl    = trades.reduce(function(s,r){ return s+(r.pnl_usd||0); }, 0);
+    var grossWin  = wins.reduce(function(s,r){ return s+(r.pnl_usd||0); }, 0);
+    var grossLoss = Math.abs(losses.reduce(function(s,r){ return s+(r.pnl_usd||0); }, 0));
+    var pf        = grossLoss === 0 ? null : grossWin / grossLoss;
+    var avgR      = trades.reduce(function(s,r){ return s+(r.r_value||0); }, 0) / trades.length;
+    var wrCol     = wr >= 60 ? '#00ff88' : wr >= 40 ? '#ffaa00' : '#ff4444';
+    var pnlCol    = netPnl >= 0 ? '#00ff88' : '#ff4444';
+    var pfStr     = pf === null ? '∞' : pf.toFixed(2);
+    var pfCol     = (pf === null || pf >= 2) ? '#00ff88' : pf >= 1 ? '#ffaa00' : '#ff4444';
+    var avgRCol   = avgR >= 0 ? '#00ff88' : '#ff4444';
+    return '<div class="srow">' +
+      '<span class="srow-label" style="color:' + (cols[sess]||'#888') + ';font-weight:700">' + sess + '</span>' +
+      '<span class="srow-count">' + trades.length + '</span>' +
+      '<span class="srow-wr" style="color:' + wrCol + '">' + wr.toFixed(1) + '%</span>' +
+      '<span class="srow-r" style="color:' + pfCol + '">' + pfStr + '</span>' +
+      '<span class="srow-pnl" style="color:' + pnlCol + '">' + (netPnl>=0?'+':'')+'$'+Math.abs(netPnl).toFixed(2) + '</span>' +
+      '<span class="srow-r" style="color:' + avgRCol + '">' + (avgR>=0?'+':'')+avgR.toFixed(2)+'R</span>' +
+      '</div>';
+  }).filter(Boolean);
+  if (!rows.length) { el.innerHTML = ''; return; }
+  var hdr = '<div class="srow" style="opacity:0.45;font-size:9px">' +
+    '<span class="srow-label">SESSION</span>' +
+    '<span class="srow-count">N</span>' +
+    '<span class="srow-wr">WR%</span>' +
+    '<span class="srow-r">PF</span>' +
+    '<span class="srow-pnl">P&L</span>' +
+    '<span class="srow-r">AVG R</span>' +
+    '</div>';
+  el.innerHTML =
+    '<div class="stat-card" style="margin:6px 0 0">' +
+    '<div class="stat-label">BY SESSION</div>' +
+    hdr + rows.join('') +
+    '</div>';
+}
+
 // ── Log tab ───────────────────────────────────────────────────────────────────
 // ── Date-filter helpers ─────────────────────────────────────────────────────────────────────────────
 function _localDateStr(d) {
@@ -1305,6 +1358,7 @@ function renderLogTab() {
   document.getElementById('log-count').textContent = countTxt;
   renderStatsPanel(log);
   renderPerfPanel(log);
+  renderSessionPanel(filtered);
 
   if (!filtered.length) {
     document.getElementById('log-body').className = 'log-empty';

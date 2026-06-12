@@ -291,6 +291,9 @@ def _load_state():
                     "r_value":          float(row.get("r_value") or 0),
                     "duration_seconds": int(row.get("duration_seconds") or 0),
                     "exchange":         row.get("exchange", "MEXC"),
+                    "session_opened":   row.get("session_opened"),
+                    "mae_r":            float(row.get("mae_r")) if row.get("mae_r") is not None else None,
+                    "mfe_r":            float(row.get("mfe_r")) if row.get("mfe_r") is not None else None,
                     "paper":            True,
                 })
             print(f"[RESTORE] trade log: {len(log_rows.data)} entries restored")
@@ -399,6 +402,17 @@ def _on_trade_close(reason: str):
     _save_state()
 
 
+def _get_session(opened_at: int) -> str:
+    """Derive session from entry timestamp (America/New_York, DST-aware)."""
+    from zoneinfo import ZoneInfo
+    dt  = datetime.fromtimestamp(opened_at, tz=ZoneInfo("America/New_York"))
+    hm  = dt.hour * 60 + dt.minute
+    if hm >= 20 * 60 or hm < 3 * 60:  return "ASIA"
+    if hm < 9 * 60 + 30:              return "EU"
+    if hm < 16 * 60:                  return "US"
+    return "OFF"
+
+
 def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r: float):
     if not exit_price or exit_price <= 0:
         raise ValueError(
@@ -408,6 +422,24 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
         )
     now_ts    = int(time.time())
     opened_at = trade.get("opened_at", now_ts)
+    is_short  = trade.get("direction") == "SHORT"
+
+    # ── MAE / MFE in R units ──────────────────────────────────────────────
+    _entry  = trade.get("entry_price") or 0
+    _sl_d   = trade.get("sl_dist") or (
+        abs(_entry - (trade.get("sl_price") or 0)) if _entry else 0
+    )
+    _ep     = trade.get("extreme_price")
+    _ap     = trade.get("adverse_price")
+    _mfe_r  = (
+        round((((_entry - _ep) if is_short else (_ep - _entry)) / _sl_d), 2)
+        if (_ep is not None and _sl_d and _entry) else None
+    )
+    _mae_r  = (
+        round((((_entry - _ap) if is_short else (_ap - _entry)) / _sl_d), 2)
+        if (_ap is not None and _sl_d and _entry) else None
+    )
+    _session = trade.get("session") or _get_session(opened_at)
 
     # ── In-memory entry (powers the LOG tab + CSV export) ─────────────────────
     entry = {
@@ -429,6 +461,9 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
         "duration_seconds": now_ts - opened_at,
         "exchange":         trade.get("exchange", "MEXC"),
         "paper":            trade.get("paper", True),
+        "session_opened":   _session,
+        "mae_r":            _mae_r,
+        "mfe_r":            _mfe_r,
     }
     app_state.trade_log.append(entry)
 
@@ -457,10 +492,19 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
                 "duration_seconds": now_ts - opened_at,
                 "stoch_k":          trade.get("stoch_k"),
                 "stoch_d":          trade.get("stoch_d"),
+                "session_opened":   _session,
+                "j15m_entry":       trade.get("j15m"),
+                "j1h_entry":        trade.get("j1h"),
+                "stoch_k_entry":    trade.get("stoch_k"),
+                "stoch_d_entry":    trade.get("stoch_d"),
+                "rsi_entry":        trade.get("rsi15m"),
+                "depth_pct_entry":  trade.get("bid_pct") if not is_short else trade.get("ask_pct"),
+                "chg24h_entry":     trade.get("chg24h"),
+                "mae_r":            _mae_r,
+                "mfe_r":            _mfe_r,
             }).execute()
         except Exception as _e:
             print(f"[PERSIST] mexc_trade_log insert error: {_e}")
-
 
 
 # ── Paper trade Supabase logging ─────────────────────────────────────────────
@@ -597,6 +641,8 @@ async def _do_open_trade(
         "partial_price": alert_data.get("partial_price")     if alert_data else None,
         "session":       alert_data.get("session", "")       if alert_data else "",
         "extreme_price": None,
+        "adverse_price": None,
+        "chg24h":        alert_data.get("chg24h") if alert_data else None,
     }
 
     app_state.open_trades[key] = trade
@@ -1110,6 +1156,8 @@ async def _exit_monitor_loop():
                 # Track extreme price (lowest for SHORT, highest for LONG)
                 ep = trade.get("extreme_price") or current
                 trade["extreme_price"] = min(ep, current) if is_short else max(ep, current)
+                ap = trade.get("adverse_price") or current
+                trade["adverse_price"] = max(ap, current) if is_short else min(ap, current)
 
                 # ── SL breach ──────────────────────────────────────────────────
                 # SHORT: SL triggers when price RISES above sl_price
