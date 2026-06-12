@@ -1196,6 +1196,11 @@ function _tradeVisRow(r) {
   '</td></tr>';
 }
 
+function _toggleExpand(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
 // ── Streak calculator ─────────────────────────────────────────────────────────
 function _calcStreak(log) {
   if (!log.length) return { type: null, count: 0 };
@@ -1307,11 +1312,27 @@ function renderSessionPanel(log) {
     '<span class="srow-pnl">P&L</span>' +
     '<span class="srow-r">AVG R</span>' +
     '</div>';
+  var _hasMae = log.filter(function(r) { return r.mae_r != null; });
+  var _excLine = '';
+  if (_hasMae.length) {
+    var _isWin2 = function(r) { return r.exit_reason==='TP1'||r.exit_reason==='TP2'||r.exit_reason==='TRAILBLAZER'; };
+    var _isSL2  = function(r) { return r.exit_reason==='SL'; };
+    var _wMae = _hasMae.filter(_isWin2);
+    var _lMae = _hasMae.filter(_isSL2);
+    var _wMfe = _hasMae.filter(function(r){ return r.mfe_r!=null; }).filter(_isWin2);
+    var _avg  = function(arr,f){ return arr.length ? arr.reduce(function(s,r){return s+(+r[f]||0);},0)/arr.length : null; };
+    var _fR   = function(v){ return v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'R'; };
+    _excLine = '<div style="font-size:9px;color:#555;font-family:\'JetBrains Mono\',monospace;padding:5px 8px 3px;letter-spacing:0.4px">' +
+      'EXCURSION &nbsp;&nbsp; winners avg MAE <span style="color:#ff8800">' + _fR(_avg(_wMae,'mae_r')) + '</span>' +
+      ' · losers avg MAE <span style="color:#ff4444">' + _fR(_avg(_lMae,'mae_r')) + '</span>' +
+      ' · winners avg MFE <span style="color:#00ff88">' + _fR(_avg(_wMfe,'mfe_r')) + '</span>' +
+      '</div>';
+  }
   el.innerHTML =
     '<div class="stat-card" style="margin:6px 0 0">' +
     '<div class="stat-label">BY SESSION</div>' +
     hdr + rows.join('') +
-    '</div>';
+    '</div>' + _excLine;
 }
 
 // ── Log tab ───────────────────────────────────────────────────────────────────
@@ -1381,8 +1402,21 @@ function renderLogTab() {
     const openTime = r.timestamp_opened ? new Date(r.timestamp_opened*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
     const closeTime= r.timestamp_closed ? new Date(r.timestamp_closed*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
     const isLong   = r.direction === 'LONG';
-    return `<tr>
-      <td style="font-weight:700;font-size:12px;">${r.symbol}</td>
+    const _sessC = { ASIA: '#9966ff', EU: '#4488ff', US: '#00ff88', OFF: '#888' };
+    const _sCol  = _sessC[r.session_opened] || '#555';
+    const _spill = r.session_opened
+      ? `<span style="font-size:8px;font-weight:700;color:${_sCol};background:${_sCol}22;border-radius:3px;padding:1px 4px;margin-top:2px;display:block;letter-spacing:0.5px">${r.session_opened}</span>`
+      : '';
+    const _maeV = r.mae_r != null ? (+r.mae_r).toFixed(1) : null;
+    const _mfeV = r.mfe_r != null ? ((+r.mfe_r >= 0 ? '+' : '') + (+r.mfe_r).toFixed(1)) : null;
+    const _excl = (_maeV !== null || _mfeV !== null)
+      ? `<span style="font-size:8px;color:#444;display:block;margin-top:1px">${_maeV !== null ? _maeV : '—'}/${_mfeV !== null ? _mfeV : '—'}</span>`
+      : '';
+    const _rid  = 'tlr-' + (r.timestamp_opened||0) + '-' + (r.timestamp_closed||0);
+    const _nd   = v => v != null ? (+v).toFixed(1) : '—';
+    const _expR = `<tr id="${_rid}" style="display:none;background:#050505"><td colspan="14" style="padding:2px 14px 8px;border-top:none;font-family:'JetBrains Mono',monospace;font-size:10px;color:#666;letter-spacing:0.3px">J ${_nd(r.j15m_entry)} · K/D ${_nd(r.stoch_k_entry)}/${_nd(r.stoch_d_entry)} · RSI ${_nd(r.rsi_entry)} · depth ${_nd(r.depth_pct_entry)}% · 24h ${_nd(r.chg24h_entry)}% · MAE ${_nd(r.mae_r)}R · MFE ${_nd(r.mfe_r)}R</td></tr>`;
+    return `<tr onclick="_toggleExpand('${_rid}')" style="cursor:pointer">
+      <td style="font-weight:700;font-size:12px;">${r.symbol}${_spill}</td>
       <td style="color:${isLong?'#00ff88':'#ff4444'};font-weight:700;">${r.direction}</td>
       <td style="color:#fff;">${r.tier||'—'}</td>
       <td style="color:#fff;">${r.leverage||'—'}x</td>
@@ -1392,11 +1426,11 @@ function renderLogTab() {
       <td style="color:#00ff88;">${fmtPrice(r.tp1_price)}</td>
       <td class="${reasonCls}">${reasonLbl}</td>
       <td style="color:${pnlColor};font-weight:700;">${(r.pnl_usd||0)>=0?'+':''}${(r.pnl_usd||0).toFixed(2)}</td>
-      <td style="color:${rColor};font-weight:700;">${(r.r_value||0)>=0?'+':''}${(r.r_value||0).toFixed(2)}R</td>
+      <td style="color:${rColor};font-weight:700;">${(r.r_value||0)>=0?'+':''}${(r.r_value||0).toFixed(2)}R${_excl}</td>
       <td style="color:#555;">${openTime}</td>
       <td style="color:#555;">${closeTime}</td>
       <td style="color:#555;">${durStr}</td>
-    </tr>` + _tradeVisRow(r);
+    </tr>` + _tradeVisRow(r) + _expR;
   }).join('');
 
   document.getElementById('log-body').className = '';
@@ -1457,8 +1491,20 @@ async function exportCsv() {
     if (toMs   !== null && ts > toMs)   return false;
     return true;
   });
-  const fields = ['timestamp_opened','timestamp_closed','symbol','direction','score','adx1h','tier','entry_price','sl_price','tp1_price','tp2_price','exit_price','exit_reason','pnl_usd','r_value','duration_seconds','exchange','paper'];
-  const csvRows = [fields.join(',')].concat(filtered.map(r => fields.map(f => JSON.stringify(r[f] ?? '')).join(',')));
+  const FIELDS = [
+    'timestamp_opened','timestamp_closed','symbol','direction','tier','leverage',
+    'entry_price','sl_price','tp1_price','tp2_price','exit_price','exit_reason',
+    'pnl_usd','r_value','duration_seconds','exchange','paper','score','adx1h',
+    'session_opened','j15m_entry','j1h_entry','stoch_k_entry','stoch_d_entry',
+    'rsi_entry','depth_pct_entry','chg24h_entry','mae_r','mfe_r',
+  ];
+  const csvRows = [[...FIELDS, 'duration_min'].join(',')].concat(
+    filtered.map(r => {
+      const base   = FIELDS.map(f => JSON.stringify(r[f] ?? ''));
+      const durMin = r.duration_seconds != null ? JSON.stringify((r.duration_seconds/60).toFixed(1)) : '""';
+      return [...base, durMin].join(',');
+    })
+  );
   const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
