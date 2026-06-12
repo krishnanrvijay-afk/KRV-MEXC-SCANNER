@@ -10,7 +10,6 @@ from config import (
     TP1_R, TP2_R, LEVERAGE_HIGH, LEVERAGE_MID, LEVERAGE_LOW,
     COOLDOWN_SECONDS, ADX_FADE_MAX, PAPER_MODE, CONSECUTIVE_LOSS_STOP,
     MIN_SL_PCT, MIN_SL_PCT_DEFAULT, MARGIN_PER_TRADE,
-    PAIR_ADX_OVERRIDES,
 )
 
 log = logging.getLogger("scanner")
@@ -401,16 +400,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
 
                 if get_cooldown_remaining(symbol, direction) > 0:
                     continue
-
-                # ── Pair ADX override gate ────────────────────────
-                if _base(symbol) in PAIR_ADX_OVERRIDES:
-                    _adx_min = PAIR_ADX_OVERRIDES[_base(symbol)]
-                    if adx1h < _adx_min:
-                        log.info(f"[SKIP] {symbol} {direction} — "
-                                 f"ADX {adx1h:.1f} below pair minimum {_adx_min}")
-                        _pending.pop(f"{symbol}{direction}", None)
-                        _last_scores.pop(f"{symbol}{direction}", None)
-                        continue
 
                 if direction == "SHORT":
                     g_j15m  = j15m > J15M_SHORT_GATE

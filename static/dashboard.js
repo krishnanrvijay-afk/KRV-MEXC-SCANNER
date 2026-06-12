@@ -439,7 +439,20 @@ function buildCard(p, alerts, trades, changes) {
     const gateArr = confIsLong ? longGates : shortGates;
     const passing  = gateArr.filter(Boolean).length;
     const rdyCls   = confIsLong ? 'pill-ready-long' : 'pill-ready-short';
-    if      (passing === 4) pills = `<span class="pill ${rdyCls}">✦ READY</span>`;
+    if (passing === 4) {
+      const _cdDir   = confIsLong ? cdL : cdS;
+      const _shDir   = confIsLong ? p.session_halted_long : p.session_halted_short;
+      const _lgCdDir = confIsLong ? (p.large_sl_cd_long||0) : (p.large_sl_cd_short||0);
+      let _veto = null;
+      if (_cdDir   > 0) _veto = 'COOLDOWN';
+      if (_lgCdDir > 0 && !_veto) _veto = 'COOLDOWN';
+      if (adxFade       && !_veto) _veto = `ADX ${adx1h.toFixed(0)} FADE`;
+      if (_shDir        && !_veto) _veto = `SESSION ${(STATE.session||'').trim()}`.trim();
+      if (STATE.circuit_breaker?.active && !_veto) _veto = 'CIRCUIT BRK';
+      pills = _veto
+        ? `<span class="pill" style="color:#ff9900;border-color:#ff9900;background:rgba(255,153,0,0.12)">BLOCKED: ${_veto}</span>`
+        : `<span class="pill ${rdyCls}">✦ READY</span>`;
+    }
     else if (passing === 3) pills = `<span class="pill pill-near-rdy">NEAR 3/4</span>`;
     else                    pills = `<span class="pill pill-partial">PARTIAL ${passing}/4</span>`;
   } else {
