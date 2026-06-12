@@ -1210,8 +1210,6 @@ async def _exit_monitor_loop():
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
-@asynccontextmanager
-
 async def _state_heartbeat_loop():
     """Saves state every 60 s while any position is open."""
     while True:
@@ -1219,6 +1217,7 @@ async def _state_heartbeat_loop():
         if app_state.open_trades:
             _save_state()
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     global mexc_client
     mexc_client = MexcClient()
