@@ -261,7 +261,7 @@ def _load_state():
         # ── Trade log → in-memory list ─────────────────────────────────────────
         log_rows = sb.table("mexc_trade_log").select("*").order("created_at").limit(1000).execute()
         if log_rows.data:
-            for row in log_rows.data:
+            for row in [r for r in log_rows.data if r.get("close_time") is not None]:
                 def _ts(iso):
                     if not iso:
                         return 0
@@ -391,14 +391,11 @@ def _update_daily_pnl(pnl: float):
 
 def _on_trade_close(reason: str):
     global consecutive_losses, circuit_breaker_active
-    if reason == "SL":
-        consecutive_losses += 1
-        print(f"[CIRCUIT BREAKER] consecutive_losses={consecutive_losses}/{CONSECUTIVE_LOSS_STOP}")
-        if consecutive_losses >= CONSECUTIVE_LOSS_STOP and not circuit_breaker_active:
-            circuit_breaker_active = True
-            print("[CIRCUIT BREAKER] ACTIVE — auto-entry paused")
-    else:
-        consecutive_losses = 0
+    # ── Circuit breaker suppressed — permanently inactive ───────────────────
+    # Trigger logic removed; CB can never fire. Both fields are force-cleared
+    # on every close so mexc_scanner_state always persists False / 0.
+    consecutive_losses     = 0
+    circuit_breaker_active = False
     _save_state()
 
 
@@ -439,6 +436,10 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
         round((((_entry - _ap) if is_short else (_ap - _entry)) / _sl_d), 2)
         if (_ap is not None and _sl_d and _entry) else None
     )
+    if _mfe_r is None:
+        print(f"[ANALYTICS WARN] mfe_r is null for {trade.get('symbol')} — extreme_price={_ep} entry={_entry} sl_dist={_sl_d}")
+    if _mae_r is None:
+        print(f"[ANALYTICS WARN] mae_r is null for {trade.get('symbol')} — adverse_price={_ap} entry={_entry} sl_dist={_sl_d}")
     _session = trade.get("session") or _get_session(opened_at)
 
     # ── In-memory entry (powers the LOG tab + CSV export) ─────────────────────
@@ -505,6 +506,53 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
             }).execute()
         except Exception as _e:
             print(f"[TRADE LOG WRITE FAILED] {_e}")
+
+
+async def _open_trade_log_row(trade: dict):
+    """Insert an entry-analytics snapshot into mexc_trade_log at trade-open time.
+
+    If any column is missing, run once in Supabase SQL editor:
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS j15m_entry       float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS j1h_entry        float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS stoch_k_entry    float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS stoch_d_entry    float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS rsi_entry        float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS depth_pct_entry  float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS chg24h_entry     float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS session_opened   text;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS mae_r            float;
+      ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS mfe_r            float;
+    """
+    sb = _get_supabase()
+    if not sb:
+        return
+    try:
+        is_short  = trade.get("direction") == "SHORT"
+        opened_at = trade.get("opened_at", int(time.time()))
+        open_iso  = datetime.fromtimestamp(opened_at, tz=timezone.utc).isoformat()
+        sb.table("mexc_trade_log").insert({
+            "pair":            trade["symbol"],
+            "direction":       trade["direction"],
+            "tier":            trade.get("tier"),
+            "leverage":        trade.get("leverage"),
+            "exchange":        trade.get("exchange", "MEXC"),
+            "entry_price":     trade.get("entry_price"),
+            "sl":              trade.get("sl_price"),
+            "tp1":             trade.get("tp1_price"),
+            "tp2":             trade.get("tp2_price"),
+            "open_time":       open_iso,
+            "session_opened":  trade.get("session") or _get_session(opened_at),
+            "j15m_entry":      trade.get("j15m"),
+            "j1h_entry":       trade.get("j1h"),
+            "stoch_k_entry":   trade.get("stoch_k"),
+            "stoch_d_entry":   trade.get("stoch_d"),
+            "rsi_entry":       trade.get("rsi15m"),
+            "depth_pct_entry": trade.get("bid_pct") if not is_short else trade.get("ask_pct"),
+            "chg24h_entry":    trade.get("chg24h"),
+        }).execute()
+        print(f"[TRADE LOG OPEN] {trade['symbol']} {trade['direction']} open-row written to mexc_trade_log")
+    except Exception as _e:
+        print(f"[TRADE LOG WRITE FAILED] mexc_trade_log open-row: {_e}")
 
 
 # ── Paper trade Supabase logging ─────────────────────────────────────────────
@@ -651,6 +699,7 @@ async def _do_open_trade(
 
     if PAPER_MODE and alert_data:
         asyncio.create_task(_save_paper_trade(trade, alert_data))
+    asyncio.create_task(_open_trade_log_row(trade))
 
     for a in app_state.alerts:
         if a["symbol"] == symbol and a["direction"] == direction:
@@ -1271,6 +1320,17 @@ async def lifespan(app: FastAPI):
     mexc_client = MexcClient()
     log_startup_config()
     _load_state()
+    print("[SCHEMA] mexc_trade_log analytics columns — run once in Supabase SQL editor if any are missing:")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS j15m_entry       float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS j1h_entry        float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS stoch_k_entry    float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS stoch_d_entry    float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS rsi_entry        float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS depth_pct_entry  float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS chg24h_entry     float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS session_opened   text;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS mae_r            float;")
+    print("  ALTER TABLE mexc_trade_log ADD COLUMN IF NOT EXISTS mfe_r            float;")
 
     # ── Mode log ──────────────────────────────────────────────────────────────
     if PAPER_MODE:
