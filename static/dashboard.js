@@ -1553,6 +1553,7 @@ function openPairOverlay(sym) {
   if (document.getElementById('pair-ov-bd')) return;
   const bd = document.createElement('div');
   bd.id = 'pair-ov-bd';
+  bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;gap:12px;padding:20px;z-index:9000';
   bd.addEventListener('click', e => { if (e.target === bd) closePairOverlay(); });
   const pn = document.createElement('div');
   pn.id = 'pair-ov-pn';
@@ -1763,7 +1764,157 @@ function _ovRulerHtml(d, dir) {
   </div>`;
 }
 
-function _ovActionsHtml(d, state, dir, trade) {
+
+    function _ovPassIcon(pass) {
+      return pass
+        ? '<span style="color:#00e676;font-weight:700;font-size:13px;font-family:\'JetBrains Mono\',monospace">[OK]</span>'
+        : '<span style="color:#ff5252;font-weight:700;font-size:13px;font-family:\'JetBrains Mono\',monospace">[x]</span>';
+    }
+
+    function _ovGateLabelHtml(label, pass) {
+      const col = pass ? '#00e676' : '#ff5252';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#fff;letter-spacing:0.05em">${label}</span>
+        ${_ovPassIcon(pass)}
+      </div>`;
+    }
+
+    function _ovVerdictHtml(d, dir) {
+      const gates = _ovGates(d, dir);
+      const score = gates.filter(Boolean).length;
+      const allPass = score === 4;
+      const bg  = allPass ? '#081a08' : '#1a0808';
+      const col = allPass ? '#00e676' : '#ff5252';
+      const bdr = allPass ? '#00e67233' : '#ff525233';
+      const btcH = (STATE?.pair_states||[]).find(p => p.symbol === 'BTC_USDT');
+      const _symBase = d.symbol ? d.symbol.replace('_USDT','') : '';
+      const corr = BTC_CORRELATION[d.symbol] ?? BTC_CORRELATION[_symBase] ?? 0.75;
+      const rg   = corr < 0.65 ? null : _btcRegime(btcH);
+      let msg;
+      if (rg?.state === 'STOP' && corr >= 0.75) {
+        msg = '[NO] LONG BLOCKED - BTC J1H in STOP zone';
+      } else if (allPass) {
+        msg = '[OK] ALL GATES PASS - ' + (rg ? rg.label.replace(/[^\x00-\x7F]/g,'') + ' confirmed' : 'regime exempt');
+      } else {
+        const fails = ['J15M','J1H','STOCH K/D','DEPTH'].filter((_,i) => !gates[i]);
+        msg = '[x] NOT READY - ' + fails.join(', ');
+      }
+      return `<div style="margin:4px 10px 0;padding:4px 8px;border-radius:3px;background:${bg};border:1px solid ${bdr};font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${col};letter-spacing:0.05em">${msg}</div>`;
+    }
+
+    function _ovGateRowHtml(label, pass, noteHtml, trackHtml) {
+      return `<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;padding:6px 10px;margin-bottom:5px">
+        ${_ovGateLabelHtml(label, pass)}
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${pass?'#00e676':'#ff5252'};margin-bottom:3px">${noteHtml}</div>
+        ${trackHtml}
+      </div>`;
+    }
+
+    function _ovTrackHtml(pct, cls) {
+      const clamped = Math.min(100, Math.max(0, pct));
+      return `<div style="position:relative;height:16px;margin:3px 0">
+        <div style="position:absolute;left:0;width:20%;height:8px;background:#00e676;opacity:0.3;top:50%;transform:translateY(-50%);border-radius:2px 0 0 2px"></div>
+        <div style="position:absolute;left:20%;width:60%;height:8px;background:#1e1e1e;top:50%;transform:translateY(-50%)"></div>
+        <div style="position:absolute;right:0;width:20%;height:8px;background:#ff4646;opacity:0.3;top:50%;transform:translateY(-50%);border-radius:0 2px 2px 0"></div>
+        <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${clamped}%;width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:2;${cls}">${Math.round(pct)}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:700;color:#fff;opacity:0.4"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>`;
+    }
+
+    function _ovJ15Html(d, dir) {
+      const j = Math.min(100, Math.max(0, d.j15m || 0));
+      const isL = dir === 'LONG';
+      const pass = isL ? j < 20 : j > 80;
+      const note = isL
+        ? `needs &lt;20 for LONG, currently ${j.toFixed(1)}`
+        : `needs &gt;80 for SHORT, currently ${j.toFixed(1)}`;
+      const dotCls = pass
+        ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000'
+        : (j > 75 ? 'background:#ff4646;box-shadow:0 0 6px #ff4646;color:#000' : 'background:#555;color:#fff');
+      return _ovGateRowHtml('J 15M', pass, note, _ovTrackHtml(j, dotCls));
+    }
+
+    function _ovJ1hHtml(d, dir) {
+      const j = Math.min(100, Math.max(0, d.j1h || 0));
+      const isL = dir === 'LONG';
+      const pass = isL ? j < 40 : j > 60;
+      const note = isL
+        ? `needs &lt;40 for LONG, currently ${j.toFixed(1)}`
+        : `needs &gt;60 for SHORT, currently ${j.toFixed(1)}`;
+      const dotCls = pass
+        ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000'
+        : (j > 60 ? 'background:#ff4646;box-shadow:0 0 6px #ff4646;color:#000' : 'background:#555;color:#fff');
+      return _ovGateRowHtml('J 1H', pass, note, _ovTrackHtml(j, dotCls));
+    }
+
+    function _ovStochHtml(d, dir) {
+      const k  = Math.min(100, Math.max(0, d.stoch_k || 0));
+      const dv = Math.min(100, Math.max(0, d.stoch_d || 0));
+      const isL    = dir === 'LONG';
+      const inZone = isL ? (k < 25) : (k > 75);
+      const cross  = isL ? (k > dv) : (k < dv);
+      const pass   = inZone && cross;
+      let note;
+      if (isL) {
+        note = pass
+          ? `K=${k.toFixed(1)} crossed above D=${dv.toFixed(1)} in LONG zone`
+          : (inZone
+              ? `K=${k.toFixed(1)} in zone but not crossed above D=${dv.toFixed(1)} yet`
+              : `K needs to drop below 25 and cross above D for LONG. Currently K=${k.toFixed(1)} D=${dv.toFixed(1)}`);
+      } else {
+        note = pass
+          ? `K=${k.toFixed(1)} crossed below D=${dv.toFixed(1)} in SHORT zone`
+          : (inZone
+              ? `K=${k.toFixed(1)} in zone but not crossed below D=${dv.toFixed(1)} yet`
+              : `K needs to rise above 75 and cross below D for SHORT. Currently K=${k.toFixed(1)} D=${dv.toFixed(1)}`);
+      }
+      const kCls = pass ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000' : 'background:#555;color:#fff';
+      const dCls = pass ? 'border:2px solid #00e676;color:#00e676' : 'border:2px solid #888;color:#888';
+      const track = `<div style="position:relative;height:16px;margin:3px 0">
+        <div style="position:absolute;left:0;width:25%;height:8px;background:#00e676;opacity:0.2;top:50%;transform:translateY(-50%);border-radius:2px 0 0 2px"></div>
+        <div style="position:absolute;left:25%;width:50%;height:8px;background:#1e1e1e;top:50%;transform:translateY(-50%)"></div>
+        <div style="position:absolute;right:0;width:25%;height:8px;background:#ff4646;opacity:0.2;top:50%;transform:translateY(-50%);border-radius:0 2px 2px 0"></div>
+        <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${k}%;width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:3;${kCls}">K</div>
+        <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${dv}%;width:11px;height:11px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:2;background:#000;${dCls}">D</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:700;color:#fff;opacity:0.4"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>`;
+      return _ovGateRowHtml('STOCH K/D', pass, note, track);
+    }
+
+    function _ovDepthHtml(d, dir) {
+      const isL  = dir === 'LONG';
+      const bid  = Math.min(100, Math.max(0, d.bid_pct || 0));
+      const ask  = Math.min(100, Math.max(0, d.ask_pct || 100 - bid));
+      const pct  = isL ? bid : ask;
+      const pass = pct >= 55;
+      const lbl  = isL ? 'BID' : 'ASK';
+      const note = pass
+        ? `${pct.toFixed(0)}% ${lbl} depth - needs &gt;=55%`
+        : `needs &gt;=55% ${lbl} depth, currently ${pct.toFixed(0)}%`;
+      const dotCls = pass
+        ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000'
+        : 'background:#555;color:#fff';
+      return _ovGateRowHtml('BID/ASK DEPTH', pass, note, _ovTrackHtml(pct, dotCls));
+    }
+
+    function _ovScanConfHtml(d, dir) {
+      const isL   = dir === 'LONG';
+      const scans = (d.last_scan_summaries || []).slice(0, 2);
+      const passed = scans.reduce((n, s) =>
+        n + ((isL ? (s.score_long||0) : (s.score_short||0)) >= 4 ? 1 : 0), 0);
+      const dots = Array.from({ length: 2 }, (_, i) => {
+        const ok = i < scans.length &&
+          (isL ? (scans[i].score_long||0) : (scans[i].score_short||0)) >= 4;
+        return `<div style="width:14px;height:14px;border-radius:50%;background:${ok?'#00e676':'#1e1e1e'};box-shadow:${ok?'0 0 6px #00e676':'none'}"></div>`;
+      }).join('');
+      return `<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;padding:6px 10px;margin-bottom:5px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#fff;letter-spacing:0.05em;margin-bottom:4px">2-SCAN CONFIRMATION</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:#fff;margin-bottom:6px">${passed} of 2 consecutive scans passed - needs 2</div>
+        <div style="display:flex;gap:8px">${dots}</div>
+      </div>`;
+    }
+
+  function _ovActionsHtml(d, state, dir, trade) {
   if (state === 'IN_TRADE' && trade) {
     return `<button class="pov-btn pov-btn-close" onclick="_ovCloseTrade('${d.symbol}','${trade.direction}')">CLOSE MEXC</button>
             <button class="pov-btn pov-btn-force" onclick="_ovCloseTrade('${d.symbol}','${trade.direction}')">FORCE CLOSE</button>`;
@@ -1891,7 +2042,6 @@ function _ovRender(pn, d) {
 
   const showRuler = (state === 'READY' || state === 'IN_TRADE') && (alert || trade);
   const rulerHtml = showRuler ? _ovRulerHtml(d, dir) : '';
-  const gatesHtml = _ovGateBarsHtml(d, dir);
   const adxCol    = (d.adx||0) >= 50 ? '#00e676' : (d.adx||0) >= 25 ? '#ffaa00' : '#fff';
   const staleHtml = state === 'READY' && alert ? _ovStaleHtml(d) : '';
   const actHtml   = _ovActionsHtml(d, state, dir, trade);
@@ -1904,13 +2054,20 @@ function _ovRender(pn, d) {
       </div>
       <button class="pov-x" onclick="closePairOverlay()"></button>
     </div>
+    ${_ovVerdictHtml(d, dir)}
     <div class="pov-body">
       <div class="pov-price-row">
         <div><span class="pov-px" id="pov-px">${fmtPrice(d.price)}</span> <span id="pov-chg">${chgHtml}</span></div>
         <div id="pov-pnl">${pnlHtml}</div>
       </div>
       <div id="pov-ruler" class="pov-ruler-wrap">${rulerHtml}</div>
-      <div class="pov-gates-sec" id="pov-gates">${gatesHtml}</div>
+      <div class="pov-gates-sec" id="pov-gates">
+          ${_ovJ15Html(d, dir)}
+          ${_ovJ1hHtml(d, dir)}
+          ${_ovStochHtml(d, dir)}
+          ${_ovDepthHtml(d, dir)}
+          ${_ovGates(d, dir).filter(Boolean).length >= 3 ? _ovScanConfHtml(d, dir) : ''}
+        </div>
       <div class="pov-adx-row">
         <div>
           <div class="pov-adx-val" id="pov-adx" style="color:${adxCol}">${(d.adx||0).toFixed(1)}</div>
