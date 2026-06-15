@@ -1878,15 +1878,51 @@ function _ovRulerHtml(d, dir) {
         <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${dv}%;width:11px;height:11px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:2;background:#000;${dCls}">D</div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:700;color:#fff;opacity:0.4"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>`;
-      const kf = Math.min(100, Math.max(0, d.stoch_k_fast || 0));
-      const df_fast = Math.min(100, Math.max(0, d.stoch_d_fast || 0));
-      const isLf = dir === 'LONG';
-      const crossFast = isLf ? (kf > df_fast && kf < 25) : (kf < df_fast && kf > 75);
-      const fastLabel = 'K=' + kf.toFixed(1) + ' D=' + df_fast.toFixed(1) + (crossFast ? ' [confirms ' + dir + ']' : ' [no cross]');
-      const fastCol = crossFast ? '#b388ff' : '#444';
-      const shadowRow = '<div style="margin-top:5px;padding-top:5px;border-top:1px solid #1a1a1a;display:flex;justify-content:space-between;align-items:center">'
-        + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:7px;font-weight:700;background:#0e0814;border:1px solid #b388ff44;color:#b388ff;padding:1px 5px;border-radius:3px">8,3,3 SHADOW</span>'
-        + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:8px;font-weight:700;color:' + fastCol + '">' + fastLabel + '</span>'
+      const kf     = Math.min(99, Math.max(0.5, d.stoch_k_fast || 0));
+      const df_val = Math.min(99, Math.max(0.5, d.stoch_d_fast || 0));
+      const isLf   = dir !== 'SHORT';
+      const inZonef = isLf ? kf < 25 : kf > 75;
+      const passf   = isLf ? (kf < 25 && kf > df_val) : (kf > 75 && kf < df_val);
+      const kfColHex = '#ff8c00';
+      const kfGlowf  = inZonef ? 'box-shadow:0 0 6px #ff8c00;' : '';
+      const dfZonef  = isLf ? df_val < 25 : df_val > 75;
+      const dfColf   = dfZonef ? '#ff8c00' : '#994d00';
+      const desc1f   = isLf
+        ? 'K needs to drop below 25 and cross above D'
+        : 'K needs to rise above 75 and cross below D';
+      let crossNotef;
+      if (passf) {
+        crossNotef = 'K ' + (isLf ? 'above' : 'below') + ' D in zone - ' + (isLf ? 'LONG' : 'SHORT') + ' crossover confirmed';
+      } else if (isLf) {
+        crossNotef = inZonef
+          ? 'K is in zone but below D - needs to cross above D'
+          : 'K is above 25 - needs to fall and cross';
+      } else {
+        crossNotef = inZonef
+          ? 'K is in zone but above D - needs to cross below D'
+          : 'K is below 75 - needs to rise and cross';
+      }
+      const noteColF = passf ? '#ff8c00' : '#994d00';
+      const shadowRow = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e1e1e">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'
+        + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:7px;font-weight:700;background:#1a0800;border:1px solid #ff8c0044;color:#ff8c00;padding:1px 5px;border-radius:3px">8,3,3 SHADOW</span>'
+        + '</div>'
+        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#ff8c00">' + desc1f + ' for ' + (isLf ? 'LONG' : 'SHORT') + '</div>'
+        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#ff8c00;margin-top:2px">Currently K=' + (d.stoch_k_fast||0).toFixed(1) + ' D=' + (d.stoch_d_fast||0).toFixed(1) + '</div>'
+        + '<div style="position:relative;height:10px;background:#1a1a1a;border-radius:3px;margin:8px 0 0;overflow:visible">'
+        + '<div style="position:absolute;left:0;width:25%;height:100%;background:#ff8c00;opacity:0.2;border-radius:3px 0 0 3px;pointer-events:none"></div>'
+        + '<div style="position:absolute;left:75%;width:25%;height:100%;background:#ff8c00;opacity:0.2;border-radius:0 3px 3px 0;pointer-events:none"></div>'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + kf.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:#ff8c00;' + kfGlowf + 'display:flex;align-items:center;justify-content:center;z-index:2">'
+        + '<span style="font-size:7px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">K</span>'
+        + '</div>'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + df_val.toFixed(1) + '%;width:12px;height:12px;border-radius:2px;border:1.5px solid ' + dfColf + ';background:transparent;display:flex;align-items:center;justify-content:center;z-index:1">'
+        + '<span style="font-size:7px;font-weight:700;color:' + dfColf + ';font-family:\'JetBrains Mono\',monospace;line-height:1">D</span>'
+        + '</div>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:8px;color:#444;font-family:\'JetBrains Mono\',monospace;margin:3px 0 4px">'
+        + '<span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>'
+        + '</div>'
+        + '<div style="font-size:9px;color:' + noteColF + ';font-family:\'JetBrains Mono\',monospace">' + crossNotef + '</div>'
         + '</div>';
       return _ovGateRowHtml('STOCH K/D', pass, note, track) + shadowRow;
     }
