@@ -1317,6 +1317,7 @@ async def _state_heartbeat_loop():
             _save_state()
 
 async def _mexc_balance_loop():
+    first = True
     while True:
         print(f"[MEXC BALANCE] attempting fetch — key={'set' if _mexc_api.MEXC_API_KEY else 'MISSING'}")
         try:
@@ -1336,7 +1337,8 @@ async def _mexc_balance_loop():
             import traceback
             print(f"[MEXC BALANCE] error: {e}")
             print(f"[MEXC BALANCE] traceback: {traceback.format_exc()}")
-        await asyncio.sleep(60)
+        await asyncio.sleep(5 if first else 60)
+        first = False
 
 
 @asynccontextmanager
