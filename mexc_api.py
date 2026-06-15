@@ -19,13 +19,17 @@ def _get(path: str, params: dict = None) -> dict:
         r = requests.get(BASE_URL + path, params=params, timeout=8)
         return r.json()
     except Exception as e:
-        print(f"[MEXC API] error: {e}")
+        import traceback
+        print(f"[MEXC API] _get error on {path}: {e}")
+        print(f"[MEXC API] traceback: {traceback.format_exc()}")
         return {}
 
 
 def get_account() -> dict:
     """Return full account breakdown — equity, available, margin, unrealized PNL."""
+    print(f"[MEXC API] get_account called — key={MEXC_API_KEY[:6]}...")
     data = _get("/api/v1/private/account/assets")
+    print(f"[MEXC API] get_account response: success={data.get('success')} keys={list(data.keys())[:5]}")
     if not data.get("success"):
         return {}
     usdt = next((a for a in data.get("data", []) if a.get("currency") == "USDT"), {})
