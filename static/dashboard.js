@@ -1848,81 +1848,124 @@ function _ovRulerHtml(d, dir) {
     }
 
     function _ovStochHtml(d, dir) {
-      const k  = Math.min(100, Math.max(0, d.stoch_k || 0));
-      const dv = Math.min(100, Math.max(0, d.stoch_d || 0));
-      const isL    = dir === 'LONG';
+      const k  = Math.min(99, Math.max(0.5, d.stoch_k || 0));
+      const dv = Math.min(99, Math.max(0.5, d.stoch_d || 0));
+      const isL    = dir !== 'SHORT';
       const inZone = isL ? (k < 25) : (k > 75);
       const cross  = isL ? (k > dv) : (k < dv);
       const pass   = inZone && cross;
+      const dZone  = isL ? dv < 25 : dv > 75;
+      const kColHex = inZone ? (isL ? '#00e676' : '#ff4646') : '#888';
+      const dColHex = dZone  ? (isL ? '#00e676' : '#ff4646') : '#666';
+      const kGlow   = inZone ? 'box-shadow:0 0 8px ' + kColHex + ',0 0 16px rgba(0,230,118,0.4);' : '';
       let note;
       if (isL) {
         note = pass
-          ? `K=${k.toFixed(1)} crossed above D=${dv.toFixed(1)} in LONG zone`
+          ? 'K=' + k.toFixed(1) + ' crossed above D=' + dv.toFixed(1) + ' in LONG zone'
           : (inZone
-              ? `K=${k.toFixed(1)} in zone but not crossed above D=${dv.toFixed(1)} yet`
-              : `K needs to drop below 25 and cross above D for LONG. Currently K=${k.toFixed(1)} D=${dv.toFixed(1)}`);
+              ? 'K=' + k.toFixed(1) + ' in zone but not crossed above D=' + dv.toFixed(1) + ' yet'
+              : 'K needs to drop below 25 and cross above D for LONG. Currently K=' + k.toFixed(1) + ' D=' + dv.toFixed(1));
       } else {
         note = pass
-          ? `K=${k.toFixed(1)} crossed below D=${dv.toFixed(1)} in SHORT zone`
+          ? 'K=' + k.toFixed(1) + ' crossed below D=' + dv.toFixed(1) + ' in SHORT zone'
           : (inZone
-              ? `K=${k.toFixed(1)} in zone but not crossed below D=${dv.toFixed(1)} yet`
-              : `K needs to rise above 75 and cross below D for SHORT. Currently K=${k.toFixed(1)} D=${dv.toFixed(1)}`);
+              ? 'K=' + k.toFixed(1) + ' in zone but not crossed below D=' + dv.toFixed(1) + ' yet'
+              : 'K needs to rise above 75 and cross below D for SHORT. Currently K=' + k.toFixed(1) + ' D=' + dv.toFixed(1));
       }
-      const kCls = pass ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000' : 'background:#555;color:#fff';
-      const dCls = pass ? 'border:2px solid #00e676;color:#00e676' : 'border:2px solid #888;color:#888';
-      const track = `<div style="position:relative;height:16px;margin:3px 0">
-        <div style="position:absolute;left:0;width:25%;height:8px;background:#00e676;opacity:0.2;top:50%;transform:translateY(-50%);border-radius:2px 0 0 2px"></div>
-        <div style="position:absolute;left:25%;width:50%;height:8px;background:#1e1e1e;top:50%;transform:translateY(-50%)"></div>
-        <div style="position:absolute;right:0;width:25%;height:8px;background:#ff4646;opacity:0.2;top:50%;transform:translateY(-50%);border-radius:0 2px 2px 0"></div>
-        <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${k}%;width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:3;${kCls}">K</div>
-        <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${dv}%;width:11px;height:11px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:2;background:#000;${dCls}">D</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:700;color:#fff;opacity:0.4"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>`;
+      const gradGreen = '#003d1f 0%,#003d1f 4.8%,#0a0a0a 4.8%,#0a0a0a 5%,'
+        + '#005a2d 5%,#005a2d 9.8%,#0a0a0a 9.8%,#0a0a0a 10%,'
+        + '#007a3d 10%,#007a3d 14.8%,#0a0a0a 14.8%,#0a0a0a 15%,'
+        + '#009e4e 15%,#009e4e 19.8%,#0a0a0a 19.8%,#0a0a0a 20%,'
+        + '#00c261 20%,#00c261 24.8%,#0a0a0a 24.8%,#0a0a0a 25%,'
+        + '#00e676 25%';
+      const gradGrey = '#1a1a1a 25%,#1a1a1a 75%';
+      const gradRed  = '#ff4646 75%,#ff4646 79.8%,#0a0a0a 79.8%,#0a0a0a 80%,'
+        + '#d93a3a 80%,#d93a3a 84.8%,#0a0a0a 84.8%,#0a0a0a 85%,'
+        + '#b02f2f 85%,#b02f2f 89.8%,#0a0a0a 89.8%,#0a0a0a 90%,'
+        + '#882424 90%,#882424 94.8%,#0a0a0a 94.8%,#0a0a0a 95%,'
+        + '#601a1a 95%,#601a1a 99.8%,#0a0a0a 99.8%,#0a0a0a 100%,'
+        + '#3a0f0f 100%';
+      const ticksHtml = '<div style="display:flex;margin-top:3px;font-size:7px;font-weight:700;">'
+        + '<span style="width:5%;text-align:center;color:#00e676">0</span>'
+        + '<span style="width:5%;text-align:center;color:#00e676">5</span>'
+        + '<span style="width:5%;text-align:center;color:#00e676">10</span>'
+        + '<span style="width:5%;text-align:center;color:#00e676">15</span>'
+        + '<span style="width:5%;text-align:center;color:#00e676">20</span>'
+        + '<span style="width:5%;text-align:center;color:#00e676">25</span>'
+        + '<span style="flex:1;text-align:center;color:#444">50</span>'
+        + '<span style="width:5%;text-align:center;color:#ff4646">75</span>'
+        + '<span style="width:5%;text-align:center;color:#ff4646">80</span>'
+        + '<span style="width:5%;text-align:center;color:#ff4646">85</span>'
+        + '<span style="width:5%;text-align:center;color:#ff4646">90</span>'
+        + '<span style="width:5%;text-align:center;color:#ff4646">95</span>'
+        + '<span style="width:5%;text-align:center;color:#ff4646">100</span>'
+        + '</div>';
+      const track = '<div style="position:relative;height:16px;border-radius:4px;width:100%;margin:4px 0;background:linear-gradient(to right,' + gradGreen + ',' + gradGrey + ',' + gradRed + ')">'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + dv.toFixed(1) + '%;width:12px;height:12px;border-radius:2px;border:1.5px solid ' + dColHex + ';background:#000;display:flex;align-items:center;justify-content:center;z-index:1">'
+        + '<span style="font-size:7px;font-weight:700;color:' + dColHex + ';font-family:\'JetBrains Mono\',monospace;line-height:1">D</span>'
+        + '</div>'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + k.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:' + kColHex + ';' + kGlow + 'display:flex;align-items:center;justify-content:center;z-index:2">'
+        + '<span style="font-size:7px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">K</span>'
+        + '</div>'
+        + '</div>'
+        + ticksHtml;
       const kf     = Math.min(99, Math.max(0.5, d.stoch_k_fast || 0));
       const df_val = Math.min(99, Math.max(0.5, d.stoch_d_fast || 0));
       const isLf   = dir !== 'SHORT';
       const inZonef = isLf ? kf < 25 : kf > 75;
       const passf   = isLf ? (kf < 25 && kf > df_val) : (kf > 75 && kf < df_val);
-      const kfColHex = '#ff8c00';
-      const kfGlowf  = inZonef ? 'box-shadow:0 0 6px #ff8c00;' : '';
-      const dfZonef  = isLf ? df_val < 25 : df_val > 75;
-      const dfColf   = dfZonef ? '#ff8c00' : '#994d00';
-      const desc1f   = isLf
-        ? 'K needs to drop below 25 and cross above D'
-        : 'K needs to rise above 75 and cross below D';
+      const dfZonef = isLf ? df_val < 25 : df_val > 75;
+      const desc1f  = isLf ? 'K needs to drop below 25 and cross above D' : 'K needs to rise above 75 and cross below D';
       let crossNotef;
       if (passf) {
         crossNotef = 'K ' + (isLf ? 'above' : 'below') + ' D in zone - ' + (isLf ? 'LONG' : 'SHORT') + ' crossover confirmed';
       } else if (isLf) {
-        crossNotef = inZonef
-          ? 'K is in zone but below D - needs to cross above D'
-          : 'K is above 25 - needs to fall and cross';
+        crossNotef = inZonef ? 'K is in zone but below D - needs to cross above D' : 'K is above 25 - needs to fall and cross';
       } else {
-        crossNotef = inZonef
-          ? 'K is in zone but above D - needs to cross below D'
-          : 'K is below 75 - needs to rise and cross';
+        crossNotef = inZonef ? 'K is in zone but above D - needs to cross below D' : 'K is below 75 - needs to rise and cross';
       }
       const noteColF = passf ? '#ff8c00' : '#994d00';
+      const gradOrangGreen = '#2a1400 0%,#2a1400 4.8%,#0a0a0a 4.8%,#0a0a0a 5%,'
+        + '#3d1e00 5%,#3d1e00 9.8%,#0a0a0a 9.8%,#0a0a0a 10%,'
+        + '#5a2d00 10%,#5a2d00 14.8%,#0a0a0a 14.8%,#0a0a0a 15%,'
+        + '#7a3d00 15%,#7a3d00 19.8%,#0a0a0a 19.8%,#0a0a0a 20%,'
+        + '#b05800 20%,#b05800 24.8%,#0a0a0a 24.8%,#0a0a0a 25%,'
+        + '#ff8c00 25%';
+      const gradOrangRed = '#ff8c00 75%,#ff8c00 79.8%,#0a0a0a 79.8%,#0a0a0a 80%,'
+        + '#b05800 80%,#b05800 84.8%,#0a0a0a 84.8%,#0a0a0a 85%,'
+        + '#7a3d00 85%,#7a3d00 89.8%,#0a0a0a 89.8%,#0a0a0a 90%,'
+        + '#5a2d00 90%,#5a2d00 94.8%,#0a0a0a 94.8%,#0a0a0a 95%,'
+        + '#3d1e00 95%,#3d1e00 99.8%,#0a0a0a 99.8%,#0a0a0a 100%,'
+        + '#2a1400 100%';
+      const ticksOrng = '<div style="display:flex;margin-top:3px;font-size:7px;font-weight:700;">'
+        + '<span style="width:5%;text-align:center;color:#ff8c00">0</span>'
+        + '<span style="width:5%;text-align:center;color:#ff8c00">5</span>'
+        + '<span style="width:5%;text-align:center;color:#ff8c00">10</span>'
+        + '<span style="width:5%;text-align:center;color:#ff8c00">15</span>'
+        + '<span style="width:5%;text-align:center;color:#ff8c00">20</span>'
+        + '<span style="width:5%;text-align:center;color:#ff8c00">25</span>'
+        + '<span style="flex:1;text-align:center;color:#333">50</span>'
+        + '<span style="width:5%;text-align:center;color:#994d00">75</span>'
+        + '<span style="width:5%;text-align:center;color:#994d00">80</span>'
+        + '<span style="width:5%;text-align:center;color:#994d00">85</span>'
+        + '<span style="width:5%;text-align:center;color:#994d00">90</span>'
+        + '<span style="width:5%;text-align:center;color:#994d00">95</span>'
+        + '<span style="width:5%;text-align:center;color:#994d00">100</span>'
+        + '</div>';
       const shadowRow = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e1e1e">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'
         + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:7px;font-weight:700;background:#1a0800;border:1px solid #ff8c0044;color:#ff8c00;padding:1px 5px;border-radius:3px">8,3,3 SHADOW</span>'
-        + '</div>'
-        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#ff8c00">' + desc1f + ' for ' + (isLf ? 'LONG' : 'SHORT') + '</div>'
+        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#ff8c00;margin-top:4px">' + desc1f + ' for ' + (isLf ? 'LONG' : 'SHORT') + '</div>'
         + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#ff8c00;margin-top:2px">Currently K=' + (d.stoch_k_fast||0).toFixed(1) + ' D=' + (d.stoch_d_fast||0).toFixed(1) + '</div>'
-        + '<div style="position:relative;height:10px;background:#1a1a1a;border-radius:3px;margin:8px 0 0;overflow:visible">'
-        + '<div style="position:absolute;left:0;width:25%;height:100%;background:#ff8c00;opacity:0.2;border-radius:3px 0 0 3px;pointer-events:none"></div>'
-        + '<div style="position:absolute;left:75%;width:25%;height:100%;background:#ff8c00;opacity:0.2;border-radius:0 3px 3px 0;pointer-events:none"></div>'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + kf.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:#ff8c00;' + kfGlowf + 'display:flex;align-items:center;justify-content:center;z-index:2">'
+        + '<div style="position:relative;height:16px;border-radius:4px;width:100%;margin:8px 0 0;background:linear-gradient(to right,' + gradOrangGreen + ',' + gradGrey + ',' + gradOrangRed + ')">'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + df_val.toFixed(1) + '%;width:12px;height:12px;border-radius:2px;border:1.5px solid ' + (dfZonef ? '#ff8c00' : '#7a3d00') + ';background:#000;display:flex;align-items:center;justify-content:center;z-index:1">'
+        + '<span style="font-size:7px;font-weight:700;color:' + (dfZonef ? '#ff8c00' : '#7a3d00') + ';font-family:\'JetBrains Mono\',monospace;line-height:1">D</span>'
+        + '</div>'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + kf.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:' + (inZonef ? '#ff8c00' : '#3d1e00') + ';' + (inZonef ? 'box-shadow:0 0 8px #ff8c00,0 0 16px rgba(255,140,0,0.4);' : '') + 'display:flex;align-items:center;justify-content:center;z-index:2">'
         + '<span style="font-size:7px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">K</span>'
         + '</div>'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + df_val.toFixed(1) + '%;width:12px;height:12px;border-radius:2px;border:1.5px solid ' + dfColf + ';background:transparent;display:flex;align-items:center;justify-content:center;z-index:1">'
-        + '<span style="font-size:7px;font-weight:700;color:' + dfColf + ';font-family:\'JetBrains Mono\',monospace;line-height:1">D</span>'
         + '</div>'
-        + '</div>'
-        + '<div style="display:flex;justify-content:space-between;font-size:8px;color:#444;font-family:\'JetBrains Mono\',monospace;margin:3px 0 4px">'
-        + '<span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>'
-        + '</div>'
-        + '<div style="font-size:9px;color:' + noteColF + ';font-family:\'JetBrains Mono\',monospace">' + crossNotef + '</div>'
+        + ticksOrng
+        + '<div style="font-size:9px;color:' + noteColF + ';font-family:\'JetBrains Mono\',monospace;margin-top:4px">' + crossNotef + '</div>'
         + '</div>';
       return _ovGateRowHtml('STOCH K/D', pass, note, track) + shadowRow;
     }
