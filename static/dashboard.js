@@ -201,6 +201,8 @@ function render() {
   updateNavCounts();
   updateScanStatus();
   renderBanner();
+  _renderBtcRegimePill();
+  _renderJmapRegimeBadge();
   renderMarketHealth();
   if (activeTab === 'grid')   renderCards();
   if (activeTab === 'alerts') renderAlertsTab();
@@ -230,7 +232,7 @@ function renderHeader() {
   const _upnl   = STATE?.unrealized_pnl || 0;
   const _upnlEl = document.getElementById('h-unrealized');
   if (_upnlEl) {
-    _upnlEl.textContent = (_upnl > 0 ? '+' : _upnl < 0 ? '-' : '') + '$' + Math.abs(_upnl).toFixed(2);
+    _upnlEl.textContent = '$' + Math.abs(_upnl).toFixed(2);
     _upnlEl.className   = 'hstat-value ' + (_upnl > 0 ? 'green' : _upnl < 0 ? 'red' : '');
   }
   document.getElementById('h-positions').textContent = account?.slots_used || 0;
@@ -539,7 +541,61 @@ function setBannerTF(tf) {
 }
 
 //  Compact J Opportunity Banner  chips on bar 
-function renderBanner() {
+
+  function _getBtcRegime() {
+    const btc = (STATE?.pair_states || []).find(p => p.symbol === 'BTC_USDT');
+    if (!btc) return null;
+    const j1h = btc.j1h, j15m = btc.j15m, stochK = btc.stoch_k, stochD = btc.stoch_d;
+    if (j1h == null) return null;
+    let state, cls, color, label, narrative;
+    if (j1h < 20) {
+      state='CONFIRMED_LONG'; cls='long'; color='#00e676'; label='LONG SAFE ZONE';
+      narrative='BTC is deeply oversold on the hourly. Longs have a green light from the regime.';
+    } else if (j1h < 40) {
+      state='CAUTION_LONG'; cls='caution'; color='#ffb300'; label='CAUTION ZONE';
+      narrative='BTC hourly is between oversold and neutral. Bounce possible but not confirmed. Enter longs at your discretion.';
+    } else if (j1h <= 60) {
+      state='STOP'; cls='stop'; color='#ff4646'; label='STOP ZONE';
+      narrative='BTC is in no-mans land, not oversold or overbought enough to trade confidently either direction.';
+    } else if (j1h < 80) {
+      state='CAUTION_SHORT'; cls='caution'; color='#ffb300'; label='CAUTION ZONE';
+      narrative='BTC hourly is between neutral and overbought. Enter shorts at your discretion.';
+    } else {
+      state='CONFIRMED_SHORT'; cls='short'; color='#ff4646'; label='SHORT SAFE ZONE';
+      narrative='BTC is deeply overbought on the hourly. Shorts have a green light from the regime.';
+    }
+    return {state, cls, color, label, narrative, j1h, j15m, stochK, stochD};
+  }
+
+  function _renderBtcRegimePill() {
+    const el = document.getElementById('btc-regime-pill');
+    if (!el) return;
+    const rg = _getBtcRegime();
+    if (!rg) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.className = 'btc-regime-pill-' + rg.cls;
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:8px;background:#1a0800;border:1px solid ' + rg.color + '55">' +
+        '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;line-height:1;color:' + rg.color + '">' + rg.j1h.toFixed(0) + '</div>' +
+        '<div>' +
+          '<div style="font-size:8px;font-weight:700;color:' + rg.color + ';letter-spacing:0.04em">BTC J1H ' + rg.label + '</div>' +
+          '<div style="font-size:7px;color:#888">K=' + (rg.stochK||0).toFixed(0) + ' D=' + (rg.stochD||0).toFixed(0) + '   J15M ' + (rg.j15m||0).toFixed(0) + '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function _renderJmapRegimeBadge() {
+    const el = document.getElementById('jmap-regime-badge');
+    if (!el) return;
+    const rg = _getBtcRegime();
+    if (!rg) { el.innerHTML = ''; return; }
+    el.innerHTML =
+      '<span style="display:flex;align-items:center;gap:5px;font-size:8px;font-weight:700;color:' + rg.color + '">' +
+        '<span style="width:6px;height:6px;border-radius:50%;background:' + rg.color + '"></span>' +
+        'BTC J1H ' + rg.j1h.toFixed(0) + ' ' + rg.label + '</span>';
+  }
+
+  function renderBanner() {
   const pairs = STATE?.pair_states || [];
   if (!pairs.length) return;
 
@@ -2525,7 +2581,7 @@ function fmtCd(seconds) {
       const kAboveD = sK > sD;
       const stateLabel = state==='CONFIRMED_LONG'  ? ' LONG SAFE ZONE'
                        : state==='CAUTION_LONG'    ? ' CAUTION ZONE'
-                       : state==='STOP'            ? 'ude ab STOP ZONE'
+                       : state==='STOP'            ? ' STOP ZONE'
                        : state==='CAUTION_SHORT'   ? ' CAUTION ZONE'
                        : state==='CONFIRMED_SHORT' ? ' SHORT SAFE ZONE'
                        :                            ' NOT APPLIED';
