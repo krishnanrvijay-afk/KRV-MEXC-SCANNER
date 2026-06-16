@@ -458,6 +458,14 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                                  f"stoch_k={stoch_k:.1f}/stoch_d={stoch_d:.1f}(need<25,k>d) "
                                  f"bid={bid_pct:.1f}%(need>={DEPTH_GATE_PCT}%)")
 
+                if symbol == "ZEC_USDT":
+                    if direction == "SHORT" and j1h > 60 and adx1h > 35:
+                        log.info(f"[ZEC GATE] ZEC_USDT SHORT blocked -- J1H={j1h:.1f} > 60 AND ADX={adx1h:.1f} > 35")
+                        continue
+                    if direction == "LONG" and j1h < 40 and adx1h > 35:
+                        log.info(f"[ZEC GATE] ZEC_USDT LONG blocked -- J1H={j1h:.1f} < 40 AND ADX={adx1h:.1f} > 35")
+                        continue
+
                 # -- GATE3 log - every scan when >= 3 of 4 gates pass ------------
                 _gate_list  = [g_j15m, g_j1h, g_stoch, g_depth]
                 _gate_count = sum(_gate_list)
