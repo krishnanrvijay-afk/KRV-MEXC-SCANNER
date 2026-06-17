@@ -1706,6 +1706,62 @@ async def reset_session():
     return {"reset": True, "message": "Session reset - daily P&L, cooldowns and circuit breaker cleared"}
 
 
+
+# -- Runtime settings --------------------------------------------------------
+
+@app.get("/api/settings")
+async def get_settings():
+    """Return live values of all runtime-adjustable scanner settings."""
+    return {
+        "paper_mode":            PAPER_MODE,
+        "telegram_enabled":      TELEGRAM_ENABLED,
+        "cooldown_seconds":      _scanner_mod.COOLDOWN_SECONDS,
+        "depth_gate_pct":        _scanner_mod.DEPTH_GATE_PCT,
+        "adx_fade_max":          _scanner_mod.ADX_FADE_MAX,
+        "margin_per_trade":      MARGIN_PER_TRADE,
+        "daily_loss_limit":      DAILY_LOSS_LIMIT,
+        "consecutive_loss_stop": _scanner_mod.CONSECUTIVE_LOSS_STOP,
+        "j15m_short_gate":       _scanner_mod.J15M_SHORT_GATE,
+        "j15m_long_gate":        _scanner_mod.J15M_LONG_GATE,
+        "j1h_short_min":         _scanner_mod.J1H_SHORT_MIN,
+        "j1h_long_max":          _scanner_mod.J1H_LONG_MAX,
+    }
+
+
+@app.post("/api/settings")
+async def post_settings(request: Request):
+    """Partial-update runtime settings. Only fields present in the body are changed."""
+    global PAPER_MODE, TELEGRAM_ENABLED, DAILY_LOSS_LIMIT, MARGIN_PER_TRADE, CONSECUTIVE_LOSS_STOP
+    body = await request.json()
+    if "paper_mode" in body:
+        PAPER_MODE = bool(body["paper_mode"])
+        _scanner_mod.PAPER_MODE = PAPER_MODE
+    if "telegram_enabled" in body:
+        TELEGRAM_ENABLED = bool(body["telegram_enabled"])
+    if "cooldown_seconds" in body:
+        _scanner_mod.COOLDOWN_SECONDS = int(body["cooldown_seconds"])
+    if "depth_gate_pct" in body:
+        _scanner_mod.DEPTH_GATE_PCT = float(body["depth_gate_pct"])
+    if "adx_fade_max" in body:
+        _scanner_mod.ADX_FADE_MAX = float(body["adx_fade_max"])
+    if "margin_per_trade" in body:
+        MARGIN_PER_TRADE = float(body["margin_per_trade"])
+        _scanner_mod.MARGIN_PER_TRADE = MARGIN_PER_TRADE
+    if "daily_loss_limit" in body:
+        DAILY_LOSS_LIMIT = float(body["daily_loss_limit"])
+    if "consecutive_loss_stop" in body:
+        CONSECUTIVE_LOSS_STOP = int(body["consecutive_loss_stop"])
+        _scanner_mod.CONSECUTIVE_LOSS_STOP = CONSECUTIVE_LOSS_STOP
+    if "j15m_short_gate" in body:
+        _scanner_mod.J15M_SHORT_GATE = float(body["j15m_short_gate"])
+    if "j15m_long_gate" in body:
+        _scanner_mod.J15M_LONG_GATE = float(body["j15m_long_gate"])
+    if "j1h_short_min" in body:
+        _scanner_mod.J1H_SHORT_MIN = float(body["j1h_short_min"])
+    if "j1h_long_max" in body:
+        _scanner_mod.J1H_LONG_MAX = float(body["j1h_long_max"])
+    return await get_settings()
+
 # -- Daily reset ---------------------------------------------------------------
 
 @app.post("/api/reset-day")

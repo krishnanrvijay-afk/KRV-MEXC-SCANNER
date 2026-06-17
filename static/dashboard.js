@@ -2766,3 +2766,122 @@ function _mexcAccRender() {
     }
     if (ps) { ps.textContent = d.open_positions; ps.style.color = '#ffffff'; }
   }
+
+// -- Settings Overlay -------------------------------------------------------
+
+function openSettingsSheet() {
+  var bd = document.getElementById('cfg-backdrop');
+  var sh = document.getElementById('cfg-sheet');
+  bd.style.display = 'flex';
+  requestAnimationFrame(function() { sh.style.transform = 'translateY(0)'; });
+  cfgFetch();
+}
+
+function closeSettingsSheet() {
+  var sh = document.getElementById('cfg-sheet');
+  sh.style.transform = 'translateY(100%)';
+  setTimeout(function() {
+    document.getElementById('cfg-backdrop').style.display = 'none';
+  }, 300);
+}
+
+async function cfgFetch() {
+  try {
+    var s = await fetch('/api/settings').then(function(r) { return r.json(); });
+    document.getElementById('cfg-paper').checked    = s.paper_mode;
+    cfgUpdatePaperLabel();
+    document.getElementById('cfg-tg').checked       = s.telegram_enabled;
+    cfgUpdateTgLabel();
+    document.getElementById('cfg-cooldown').value   = s.cooldown_seconds;
+    document.getElementById('cfg-depth').value      = s.depth_gate_pct;
+    document.getElementById('cfg-adx').value        = s.adx_fade_max;
+    document.getElementById('cfg-j15m-os').value    = s.j15m_short_gate;
+    document.getElementById('cfg-j15m-ob').value    = s.j15m_long_gate;
+    document.getElementById('cfg-j1h-os').value     = s.j1h_short_min;
+    document.getElementById('cfg-j1h-ob').value     = s.j1h_long_max;
+    document.getElementById('cfg-margin').value     = s.margin_per_trade;
+    document.getElementById('cfg-dailyloss').value  = Math.abs(s.daily_loss_limit);
+    document.getElementById('cfg-cb').value         = s.consecutive_loss_stop;
+  } catch(e) { console.error('cfgFetch error', e); }
+}
+
+function cfgUpdatePaperLabel() {
+  var on = document.getElementById('cfg-paper').checked;
+  var el = document.getElementById('cfg-paper-label');
+  el.textContent = on ? 'PAPER \u2014 no real funds' : 'LIVE \u2014 real funds at risk';
+  el.style.color = on ? '#00e676' : '#ff4444';
+}
+
+function cfgUpdateTgLabel() {
+  var on = document.getElementById('cfg-tg').checked;
+  var el = document.getElementById('cfg-tg-label');
+  el.textContent = on ? 'ON' : 'OFF';
+  el.style.color = on ? '#00e676' : '#ff4444';
+}
+
+async function cfgSave() {
+  var daily = parseFloat(document.getElementById('cfg-dailyloss').value);
+  var body = {
+    paper_mode:            document.getElementById('cfg-paper').checked,
+    telegram_enabled:      document.getElementById('cfg-tg').checked,
+    cooldown_seconds:      parseFloat(document.getElementById('cfg-cooldown').value),
+    depth_gate_pct:        parseFloat(document.getElementById('cfg-depth').value),
+    adx_fade_max:          parseFloat(document.getElementById('cfg-adx').value),
+    j15m_short_gate:       parseFloat(document.getElementById('cfg-j15m-os').value),
+    j15m_long_gate:        parseFloat(document.getElementById('cfg-j15m-ob').value),
+    j1h_short_min:         parseFloat(document.getElementById('cfg-j1h-os').value),
+    j1h_long_max:          parseFloat(document.getElementById('cfg-j1h-ob').value),
+    margin_per_trade:      parseFloat(document.getElementById('cfg-margin').value),
+    daily_loss_limit:      -(Math.abs(daily)),
+    consecutive_loss_stop: parseInt(document.getElementById('cfg-cb').value, 10),
+  };
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    var btn = document.getElementById('cfg-save-btn');
+    if (btn) {
+      btn.textContent = 'SAVED';
+      setTimeout(function() { btn.textContent = 'SAVE SETTINGS'; }, 1500);
+    }
+  } catch(e) { console.error('cfgSave error', e); }
+}
+
+var _cfgResetTimer = null;
+function cfgResetArm() {
+  var btn = document.getElementById('cfg-reset-btn');
+  if (_cfgResetTimer) {
+    clearTimeout(_cfgResetTimer);
+    _cfgResetTimer = null;
+    btn.textContent = 'RESETTING...';
+    fetch('/api/reset-session', { method: 'POST' })
+      .then(function() {
+        btn.textContent = 'RESET COMPLETE';
+        btn.style.background = 'transparent';
+        btn.style.color = '#ff4444';
+        btn.style.borderColor = '#ff4444';
+        setTimeout(function() { btn.textContent = 'RESET SESSION'; }, 2000);
+      })
+      .catch(function(e) {
+        console.error('reset error', e);
+        btn.textContent = 'RESET SESSION';
+        btn.style.background = 'transparent';
+        btn.style.color = '#ff4444';
+        btn.style.borderColor = '#ff4444';
+      });
+  } else {
+    btn.textContent = 'TAP TO CONFIRM';
+    btn.style.background = '#ff4444';
+    btn.style.color = '#000';
+    btn.style.borderColor = '#ff4444';
+    _cfgResetTimer = setTimeout(function() {
+      btn.textContent = 'RESET SESSION';
+      btn.style.background = 'transparent';
+      btn.style.color = '#ff4444';
+      btn.style.borderColor = '#ff4444';
+      _cfgResetTimer = null;
+    }, 3000);
+  }
+}
