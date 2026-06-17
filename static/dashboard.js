@@ -574,12 +574,12 @@ function setBannerTF(tf) {
     if (!el) return;
     const rg = _getBtcRegime();
     if (!rg) { el.style.display = 'none'; return; }
-    el.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 9px 4px 7px;border-radius:6px;white-space:nowrap;flex-shrink:0;background:#1a0800;border:1px solid ' + rg.color + '55';
+    el.style.cssText = 'display:flex;align-items:center;gap:5px;padding:3px 8px 3px 7px;border-radius:6px;flex-shrink:1;min-width:0;overflow:hidden;background:#1a0800;border:1px solid ' + rg.color + '55';
     el.innerHTML =
-      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;line-height:1;color:' + rg.color + ';font-weight:800">' + rg.j1h.toFixed(0) + '</div>' +
-      '<div>' +
-        '<div style="font-size:7px;font-weight:800;color:' + rg.color + ';line-height:1.25">' + rg.label + '</div>' +
-        '<div style="font-size:6.5px;color:#fff;font-weight:700">K=' + (rg.stochK||0).toFixed(0) + ' D=' + (rg.stochD||0).toFixed(0) + '</div>' +
+      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:24px;line-height:1;color:' + rg.color + ';font-weight:800;flex-shrink:0">' + rg.j1h.toFixed(0) + '</div>' +
+      '<div style="min-width:0;overflow:hidden">' +
+        '<div style="font-size:12px;font-weight:800;color:' + rg.color + ';line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + rg.label + '</div>' +
+        '<div style="font-size:7px;color:#fff;font-weight:700;white-space:nowrap">K=' + (rg.stochK||0).toFixed(0) + ' D=' + (rg.stochD||0).toFixed(0) + '</div>' +
       '</div>';
   }
   function _renderJmapRegimeBadge() {
@@ -2473,14 +2473,17 @@ async function _ovCloseTrade(sym, dir) {
 //  Reset Session 
 function renderResetSessionBtn() {
   if (document.getElementById('reset-session-btn')) return;
-  const mb = document.getElementById('mode-badge');
-  if (!mb || !mb.parentNode) return;
+  const logPill = document.querySelector('.fp.tab-log');
+  if (!logPill || !logPill.parentNode) return;
   const btn = document.createElement('button');
   btn.id        = 'reset-session-btn';
-  btn.className = 'reset-session-btn';
-  btn.textContent = 'RESET SESSION';
+  btn.className = 'fp';
+  btn.textContent = 'RESET';
   btn.onclick   = showResetSessionModal;
-  mb.parentNode.insertBefore(btn, mb.nextSibling);
+  btn.style.color       = '#ff8c00';
+  btn.style.borderColor = 'rgba(255,140,0,0.4)';
+  btn.style.background  = '#111';
+  logPill.parentNode.insertBefore(btn, logPill.nextSibling);
 }
 
 function showResetSessionModal() {
