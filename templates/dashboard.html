@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MEXC BOUNCE SCANNER</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;600;800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #080808; color: #fff; font-family: 'Inter', sans-serif; font-size: 13px; overflow-x: hidden; }
 
@@ -527,26 +527,25 @@
       <div style="display:flex;align-items:center;gap:7px;min-width:0">
         <img src="https://assets.coingecko.com/markets/images/409/small/MEXC_logo_square.jpeg" style="width:22px;height:22px;border-radius:4px;vertical-align:middle;flex-shrink:0;object-fit:cover;filter:sepia(1) saturate(10) hue-rotate(-10deg) brightness(1.1)" alt="MEXC">
         <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:0.03em;color:#fff;white-space:nowrap">MEXC BOUNCE</span>
-        <div id="mode-badge" class="mode-badge" style="padding:3px 8px;border-radius:5px;font-size:8px;font-weight:800;border:1px solid #2a4a7a;color:#5ab4ff;background:#0a1422;flex-shrink:0;white-space:nowrap"></div>
+        <div id="mode-badge" class="mode-badge" style="padding:3px 8px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:600;letter-spacing:0.07em;border:1px solid #2a4a7a;color:#5ab4ff;background:#0a1422;flex-shrink:0;white-space:nowrap"></div>
       </div>
-      <div id="btc-regime-pill" style="display:none;flex-shrink:1;min-width:0"></div>
       <button id="settings-gear-pill" onclick="" style="background:none;border:none;cursor:pointer;font-size:32px;line-height:1;color:#fff;padding:0;flex-shrink:0">&#9881;</button>
     </div>
     <div class="banner-line2" style="display:flex;align-items:stretch;gap:6px;flex-wrap:nowrap;width:100%">
       <div class="value-pill" style="display:flex;flex-direction:column;background:#0c0c0c;border:1px solid #1e1e1e;border-radius:6px;padding:4px 6px;flex:1;min-width:0">
-        <div style="font-size:6.5px;font-weight:800;color:#fff;letter-spacing:0.04em;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">DAILY P&amp;L</div>
-        <div id="h-pnl" style="font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">$0.00</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:6.5px;font-weight:600;color:#fff;letter-spacing:0.07em;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">DAILY P&amp;L</div>
+        <div id="h-pnl" style="font-family:'Bebas Neue',sans-serif;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">$0.00</div>
       </div>
       <div class="value-pill" style="display:flex;flex-direction:column;background:#0c0c0c;border:1px solid #1e1e1e;border-radius:6px;padding:4px 6px;flex:1;min-width:0">
-        <div style="font-size:6.5px;font-weight:800;color:#fff;letter-spacing:0.04em;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">UNREALIZED</div>
-        <div id="h-unrealized" style="font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">$0.00</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:6.5px;font-weight:600;color:#fff;letter-spacing:0.07em;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">UNREALIZED</div>
+        <div id="h-unrealized" style="font-family:'Bebas Neue',sans-serif;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">$0.00</div>
       </div>
       <div class="balance-pill" style="display:flex;flex-direction:column;border-radius:6px;border:1px solid #2a2a2a;background:#0c0c0c;padding:2px 5px;flex:1;min-width:0">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:13px;font-weight:800;color:#fff;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">BALANCE</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#fff;letter-spacing:0.07em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">BALANCE</div>
           <button id="mexc-acc-pill-eye" onclick="mexcAccToggleMask(event)" style="background:none;border:none;cursor:pointer;font-size:14px;color:#fff;padding:0 0 0 4px">&#x1F576;</button>
         </div>
-        <div id="mexc-acc-pill-val" style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;color:#fff">TAP FOR BALANCE</div>
+        <div id="mexc-acc-pill-val" style="font-family:'Bebas Neue',sans-serif;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;color:#fff">TAP FOR BALANCE</div>
       </div>
     </div>
   </div>
