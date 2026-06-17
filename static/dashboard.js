@@ -59,7 +59,7 @@ document.addEventListener('click', e => {
 
 //  Navigation 
 function setNav(el) {
-  document.querySelectorAll('.fp').forEach(f => f.classList.remove('active'));
+  document.querySelectorAll('.fp, .mexc-alert-pill').forEach(f => f.classList.remove('active'));
   el.classList.add('active');
   activeTab = el.dataset.tab;
   if (activeTab === 'grid' && el.dataset.filter) activeFilter = el.dataset.filter;
@@ -225,17 +225,18 @@ function updateNavCounts() {
 function renderHeader() {
   const { daily, account, circuit_breaker, scan_count } = STATE;
 
+  const _MASK = '••••';
   const pnlEl = document.getElementById('h-pnl');
-  pnlEl.textContent = '$' + Math.abs(daily?.pnl || 0).toFixed(2);
-  pnlEl.className   = 'hstat-value';
-  pnlEl.style.color = (daily?.pnl || 0) > 0 ? '#00e676' : ((daily?.pnl || 0) < 0 ? '#ff4646' : '#ffffff');
+  if (pnlEl) {
+    if (_mexcAccMasked) { pnlEl.textContent = _MASK; pnlEl.style.color = '#333'; }
+    else { pnlEl.textContent = '$' + Math.abs(daily?.pnl || 0).toFixed(2); pnlEl.style.color = (daily?.pnl || 0) > 0 ? '#00e676' : ((daily?.pnl || 0) < 0 ? '#ff4646' : '#ffffff'); }
+  }
 
   const _upnl   = STATE?.unrealized_pnl || 0;
   const _upnlEl = document.getElementById('h-unrealized');
   if (_upnlEl) {
-    _upnlEl.textContent = '$' + Math.abs(_upnl).toFixed(2);
-    _upnlEl.className   = 'hstat-value';
-    _upnlEl.style.color = _upnl > 0 ? '#00e676' : (_upnl < 0 ? '#ff4646' : '#ffffff');
+    if (_mexcAccMasked) { _upnlEl.textContent = _MASK; _upnlEl.style.color = '#333'; }
+    else { _upnlEl.textContent = '$' + Math.abs(_upnl).toFixed(2); _upnlEl.style.color = _upnl > 0 ? '#00e676' : (_upnl < 0 ? '#ff4646' : '#ffffff'); }
   }
   document.getElementById('h-positions').textContent = account?.slots_used || 0;
   document.getElementById('h-scans').textContent     = scan_count || 0;
@@ -574,13 +575,10 @@ function setBannerTF(tf) {
     if (!el) return;
     const rg = _getBtcRegime();
     if (!rg) { el.style.display = 'none'; return; }
-    el.style.cssText = 'display:flex;align-items:center;gap:5px;padding:3px 8px 3px 7px;border-radius:6px;flex-shrink:1;min-width:0;overflow:hidden;background:#1a0800;border:1px solid ' + rg.color + '55';
+    el.style.cssText = 'display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;flex-shrink:0;background:#111;border:1px solid ' + rg.color + '55';
     el.innerHTML =
-      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:24px;line-height:1;color:' + rg.color + ';font-weight:800;flex-shrink:0">' + rg.j1h.toFixed(0) + '</div>' +
-      '<div style="min-width:0;overflow:hidden">' +
-        '<div style="font-size:12px;font-weight:800;color:' + rg.color + ';line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + rg.label + '</div>' +
-        '<div style="font-size:7px;color:#fff;font-weight:700;white-space:nowrap">K=' + (rg.stochK||0).toFixed(0) + ' D=' + (rg.stochD||0).toFixed(0) + '</div>' +
-      '</div>';
+      '<span style="width:7px;height:7px;border-radius:50%;background:' + rg.color + ';flex-shrink:0;display:inline-block"></span>' +
+      '<span style="font-family:\'JetBrains Mono\',ui-monospace,Menlo,monospace;font-size:11px;font-weight:600;color:' + rg.color + ';white-space:nowrap">BTC ' + rg.label + '</span>';
   }
   function _renderJmapRegimeBadge() {
     const el = document.getElementById('jmap-regime-badge');
@@ -2705,9 +2703,9 @@ function mexcAccCloseCard() {
 function mexcAccToggleMask(e) {
     e.stopPropagation();
     _mexcAccMasked = !_mexcAccMasked;
-    const icon = _mexcAccMasked ? '&#x1F576;' : '&#x1F441;';
-    const eye1 = document.getElementById('mexc-acc-pill-eye');
-    if (eye1) eye1.innerHTML = icon;
+    const btn = document.getElementById('priv-toggle');
+    if (btn) btn.classList.toggle('masked', _mexcAccMasked);
+    if (STATE) renderHeader();
     _mexcAccRender();
   }
 
@@ -2737,18 +2735,14 @@ async function mexcAccFetch() {
 
 function _mexcAccRender() {
     if (!_mexcAccData) return;
-    const d   = _mexcAccData;
-    const msk = _mexcAccMasked;
-    // Sync eye icon with current mask state
-    const eye1 = document.getElementById('mexc-acc-pill-eye');
-    if (eye1) eye1.innerHTML = msk ? '&#x1F576;' : '&#x1F441;';
-    // Pill equity value -- respects mask
-    const pv  = document.getElementById('mexc-acc-pill-val');
-    if (pv) {
-      pv.style.fontSize   = '12px';
-      pv.style.fontWeight = '700';
-      pv.style.color      = msk ? '#333' : ((+d.equity) > 0 ? '#00e676' : ((+d.equity) < 0 ? '#ff4646' : '#ffffff'));
-      pv.textContent      = msk ? '' : '$' + (+d.equity).toFixed(2);
+    const d    = _mexcAccData;
+    const msk  = _mexcAccMasked;
+    const MASK = '••••';
+    // Banner balance pill
+    const hbal = document.getElementById('h-balance');
+    if (hbal) {
+      hbal.style.color = msk ? '#333' : ((+d.equity) > 0 ? '#00e676' : ((+d.equity) < 0 ? '#ff4646' : '#ffffff'));
+      hbal.textContent = msk ? MASK : '$' + (+d.equity).toFixed(2);
     }
     // Card values -- always full, never masked
     const eq = document.getElementById('mexc-acc-equity');
