@@ -56,6 +56,7 @@ _stale_tg_sent: set[str] = set()  # symbols for which stale-price TG alert was a
 _session_sl_counts: dict[str, int]   = {}    # "SYMBOL_DIRECTION_SESSION" -> SL count
 _session_halted:    set[str]         = set() # "SYMBOL_DIRECTION_SESSION" halted for session
 _large_sl_cooldowns: dict[str, float] = {}   # "SYMBOLDIR" -> expiry ts for 90-min cooldowns
+_peak_shadow: dict = {}   # trade_key -> shadow tracking state (observation only)
 _prev_session:      str              = ""
 _mexc_account: dict = {}
 
@@ -1063,6 +1064,52 @@ def _do_hc_partial_close(key: str, trade: dict, exit_price: float):
     _save_state()
 
 
+
+def _pair_family(pair: str) -> str:
+    p = (pair or "").upper()
+    if "BTC" in p:
+        return "BTC"
+    if "ZEC" in p:
+        return "ZEC"
+    return "OTHER"
+
+
+async def _write_peak_shadow_row(key: str, trade: dict, reason: str) -> None:
+    try:
+        sh = _peak_shadow.pop(key, None)
+        if sh is None:
+            return
+        sb = _get_supabase()
+        if sb is None:
+            return
+        opened_at = trade.get("opened_at")
+        open_iso  = (datetime.fromtimestamp(opened_at, tz=timezone.utc).isoformat()
+                     if opened_at else None)
+        sb.table("peak_protection_shadow").insert({
+            "venue":                  "mexc",
+            "pair":                   trade.get("symbol", ""),
+            "direction":              trade.get("direction", ""),
+            "open_time":              open_iso,
+            "exit_reason":            reason,
+            "peak_pnl_usd":           round(sh["peak_pnl_usd"], 2),
+            "peak_reached_at":        sh.get("peak_reached_at"),
+            "pair_family":            _pair_family(trade.get("symbol", "")),
+            "decay20_triggered_at":   sh.get("d20_at"),
+            "decay20_pnl_at_trigger": sh.get("d20_pnl"),
+            "decay20_phase":          sh.get("d20_phase"),
+            "decay30_triggered_at":   sh.get("d30_at"),
+            "decay30_pnl_at_trigger": sh.get("d30_pnl"),
+            "decay30_phase":          sh.get("d30_phase"),
+            "decay40_triggered_at":   sh.get("d40_at"),
+            "decay40_pnl_at_trigger": sh.get("d40_pnl"),
+            "decay40_phase":          sh.get("d40_phase"),
+        }).execute()
+        print(f"[SHADOW] wrote peak_protection_shadow {trade.get('symbol')} "
+              f"{trade.get('direction')} peak=${sh['peak_pnl_usd']:.2f} reason={reason}")
+    except Exception as _psh_e:
+        print(f"[SHADOW] write error: {_psh_e}")
+
+
 def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
     """Synchronous internal close - no exchange call, price already known."""
     if not exit_price or exit_price <= 0:
@@ -1101,6 +1148,7 @@ def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
         threading.Thread(target=_exit_tg, daemon=True).start()
     if PAPER_MODE:
         asyncio.create_task(_update_paper_trade_close(trade, exit_price, reason, pnl))
+    asyncio.create_task(_write_peak_shadow_row(key, trade, reason))
     _save_state()
 
 
@@ -1185,6 +1233,7 @@ def _do_trailblazer_close(key: str, trade: dict, exit_price: float,
             _tg_post("\U0001F3C3 " + s + " " + sl_lbl + " \u00B7 runner out at " + _fmt_p(ep)
                      + "\n+" + f"${p:.2f}" + " \u00B7 trade total $" + f"{tp:.2f}" + " \u00B7 " + ts_str)
         threading.Thread(target=_trail_tg, daemon=True).start()
+    asyncio.create_task(_write_peak_shadow_row(key, trade, "TRAILBLAZER"))
     _save_state()
 
 
@@ -1214,6 +1263,38 @@ async def _exit_monitor_loop():
                 trade["extreme_price"] = min(ep, current) if is_short else max(ep, current)
                 ap = trade.get("adverse_price") or current
                 trade["adverse_price"] = max(ap, current) if is_short else min(ap, current)
+
+                # -- Peak PnL protection shadow (observation only, no exit logic) ----
+                try:
+                    _sh = _peak_shadow.setdefault(key, {
+                        "peak_pnl_usd":    0.0,
+                        "peak_reached_at": None,
+                        "d20_at": None, "d20_pnl": None, "d20_phase": None,
+                        "d30_at": None, "d30_pnl": None, "d30_phase": None,
+                        "d40_at": None, "d40_pnl": None, "d40_phase": None,
+                    })
+                    _sz   = trade.get("remaining_size", trade.get("size", 0)) or 0
+                    _ent  = trade.get("entry_price", 0) or 0
+                    _cpnl = ((current - _ent) * _sz if not is_short
+                             else (_ent - current) * _sz)
+                    if _cpnl > 0 and _cpnl > _sh["peak_pnl_usd"]:
+                        _sh["peak_pnl_usd"]    = _cpnl
+                        _sh["peak_reached_at"] = datetime.now(timezone.utc).isoformat()
+                    if _sh["peak_pnl_usd"] > 20:
+                        _psh_now   = datetime.now(timezone.utc).isoformat()
+                        _psh_phase = "post_tp1" if trade.get("tp1_hit") else "pre_tp1"
+                        for _psh_th, _psh_dk, _psh_pk, _psh_phk in (
+                            (0.20, "d20_at", "d20_pnl", "d20_phase"),
+                            (0.30, "d30_at", "d30_pnl", "d30_phase"),
+                            (0.40, "d40_at", "d40_pnl", "d40_phase"),
+                        ):
+                            if (_sh[_psh_dk] is None
+                                    and _cpnl < _sh["peak_pnl_usd"] * (1 - _psh_th)):
+                                _sh[_psh_dk]  = _psh_now
+                                _sh[_psh_pk]  = round(_cpnl, 2)
+                                _sh[_psh_phk] = _psh_phase
+                except Exception as _psh_e:
+                    print(f"[SHADOW] poll error: {_psh_e}")
 
                 # -- SL breach --------------------------------------------------
                 # SHORT: SL triggers when price RISES above sl_price
