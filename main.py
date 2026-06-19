@@ -1076,7 +1076,7 @@ def _pair_family(pair: str) -> str:
     return "OTHER"
 
 
-async def _write_peak_shadow_row(key: str, trade: dict, reason: str) -> None:
+async def _write_peak_shadow_row(key: str, trade: dict, reason: str, final_pnl: float) -> None:
     try:
         sh = _peak_shadow.pop(key, None)
         if sh is None:
@@ -1087,6 +1087,7 @@ async def _write_peak_shadow_row(key: str, trade: dict, reason: str) -> None:
         opened_at = trade.get("opened_at")
         open_iso  = (datetime.fromtimestamp(opened_at, tz=timezone.utc).isoformat()
                      if opened_at else None)
+        _session_ps = trade.get("session") or (_get_session(opened_at) if opened_at else None)
         sb.table("peak_protection_shadow").insert({
             "venue":                  "mexc",
             "pair":                   trade.get("symbol", ""),
@@ -1105,6 +1106,8 @@ async def _write_peak_shadow_row(key: str, trade: dict, reason: str) -> None:
             "decay40_triggered_at":   sh.get("d40_at"),
             "decay40_pnl_at_trigger": sh.get("d40_pnl"),
             "decay40_phase":          sh.get("d40_phase"),
+            "pnl_dollars":            round(final_pnl, 2),
+            "session_opened":         _session_ps,
         }).execute()
         print(f"[SHADOW] wrote peak_protection_shadow {trade.get('symbol')} "
               f"{trade.get('direction')} peak=${sh['peak_pnl_usd']:.2f} reason={reason}")
@@ -1242,7 +1245,7 @@ def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
         threading.Thread(target=_exit_tg, daemon=True).start()
     if PAPER_MODE:
         asyncio.create_task(_update_paper_trade_close(trade, exit_price, reason, pnl))
-    asyncio.create_task(_write_peak_shadow_row(key, trade, reason))
+    asyncio.create_task(_write_peak_shadow_row(key, trade, reason, pnl))
     asyncio.create_task(_write_adverse_shadow_row(key, trade, reason, pnl, r))
     asyncio.create_task(_write_sign_shadow_rows(key, trade, reason, pnl))
     _save_state()
@@ -1329,7 +1332,7 @@ def _do_trailblazer_close(key: str, trade: dict, exit_price: float,
             _tg_post("\U0001F3C3 " + s + " " + sl_lbl + " \u00B7 runner out at " + _fmt_p(ep)
                      + "\n+" + f"${p:.2f}" + " \u00B7 trade total $" + f"{tp:.2f}" + " \u00B7 " + ts_str)
         threading.Thread(target=_trail_tg, daemon=True).start()
-    asyncio.create_task(_write_peak_shadow_row(key, trade, "TRAILBLAZER"))
+    asyncio.create_task(_write_peak_shadow_row(key, trade, "TRAILBLAZER", pnl))
     asyncio.create_task(_write_adverse_shadow_row(key, trade, "TRAILBLAZER", pnl, r))
     asyncio.create_task(_write_sign_shadow_rows(key, trade, "TRAILBLAZER", pnl))
     _save_state()
@@ -1378,6 +1381,9 @@ async def _exit_monitor_loop():
                     if _cpnl > 0 and _cpnl > _sh["peak_pnl_usd"]:
                         _sh["peak_pnl_usd"]    = _cpnl
                         _sh["peak_reached_at"] = datetime.now(timezone.utc).isoformat()
+                        _sh["d20_at"] = _sh["d20_pnl"] = _sh["d20_phase"] = None
+                        _sh["d30_at"] = _sh["d30_pnl"] = _sh["d30_phase"] = None
+                        _sh["d40_at"] = _sh["d40_pnl"] = _sh["d40_phase"] = None
                     if _sh["peak_pnl_usd"] > 20:
                         _psh_now   = datetime.now(timezone.utc).isoformat()
                         _psh_phase = "post_tp1" if trade.get("tp1_hit") else "pre_tp1"
