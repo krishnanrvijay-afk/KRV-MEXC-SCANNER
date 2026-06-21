@@ -748,7 +748,43 @@ input:checked+.cfg-pill::before{transform:translateX(20px);background:#fff}
 .cfg-tear::before,.cfg-tear::after{content:'';position:absolute;top:50%;width:16px;height:16px;background:#080808;border:2px dashed #2a2a2a;border-radius:50%}
 .cfg-tear::before{left:0;transform:translate(-50%,-50%)}
 .cfg-tear::after{right:0;transform:translate(50%,-50%)}
-</style>
+  /* ── LIVE TRADE OVERLAY ── */
+    @keyframes liveDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+    @keyframes danger-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    #lt-ov-bd { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); backdrop-filter: blur(8px); z-index: 9500; align-items: center; justify-content: center; padding: 16px; }
+    #lt-ov-bd.open { display: flex; }
+    #lt-ov-sheet { width: 100%; max-width: 960px; max-height: 720px; background: #080808; border: 1px solid #1e1e1e; border-radius: 12px; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.8); }
+    #lt-ov-hdr { padding: 16px 20px 12px; border-bottom: 1px solid #1a1a1a; display: flex; align-items: flex-start; gap: 12px; }
+    #lt-ov-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow: hidden; min-height: 0; }
+    #lt-ov-left { padding: 16px 20px; border-right: 1px solid #111; overflow-y: auto; }
+    #lt-ov-right { padding: 16px 20px; overflow-y: auto; }
+    #lt-ov-ftr { padding: 12px 20px; border-top: 1px solid #1a1a1a; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; background: #050505; }
+    .lt-sec-lbl { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; color: #ffffff; letter-spacing: 0.18em; margin-bottom: 8px; }
+    .lt-tbl { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    .lt-tbl th { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; color: #ffffff; text-align: left; padding: 4px 6px; border-bottom: 1px solid #1a1a1a; }
+    .lt-tbl td { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #ffffff; padding: 5px 6px; border-bottom: 1px solid #0f0f0f; }
+    .lt-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+    .lt-stat-cell { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 5px; padding: 8px 10px; }
+    .lt-stat-lbl { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; color: #ffffff; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .lt-stat-val { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 20px; color: #ffffff; }
+    .lt-levels-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+    .lt-lvl-cell { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 5px; padding: 8px 6px; text-align: center; }
+    .lt-lvl-lbl { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; color: #ffffff; letter-spacing: 0.06em; margin-bottom: 3px; }
+    .lt-lvl-val { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 16px; color: #ffffff; }
+    .lt-bullet { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+    .lt-bullet-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .lt-bullet-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: #ffffff; line-height: 1.5; }
+    .lt-arm-btn { width: 100%; padding: 13px; border-radius: 6px; border: none; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer; transition: all 0.2s; }
+    .lt-arm-btn.armed { background: linear-gradient(135deg, #16a34a, #15803d); color: #000; }
+    .lt-arm-btn.idle { background: #111; border: 1px solid #2a2a2a; color: #fff; }
+    .lt-arm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .lt-confirm-input { width: 100%; background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 5px; padding: 10px 12px; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; outline: none; box-sizing: border-box; }
+    .lt-confirm-input:focus { border-color: #f97316; }
+    .lt-cd-timer { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.1em; }
+    .lt-cd-timer.urgent { color: #ff4444; animation: danger-pulse 0.8s ease-in-out infinite; }
+    .ac-btn-live { flex: 1.4; background: #f97316; color: #000; border: none; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .ac-btn-live:disabled { opacity: 0.45; cursor: not-allowed; }
+  </style>
 <!-- SETTINGS OVERLAY -->
   <div id="cfg-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:9000;align-items:flex-end;justify-content:center">
     <div id="cfg-sheet" style="width:100%;max-width:430px;background:#111113;border-top:3px solid #f97316;border-radius:16px 16px 0 0;padding:24px 20px 32px;font-family:'JetBrains Mono',monospace;max-height:88vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)">
@@ -804,6 +840,33 @@ input:checked+.cfg-pill::before{transform:translateX(20px);background:#fff}
         <div style="font-size:8px;font-weight:700;color:#ff4444;letter-spacing:0.16em;margin-bottom:10px">DANGER ZONE</div>
         <button id="cfg-reset-btn" onclick="cfgResetArm()" style="width:100%;padding:10px;background:transparent;border:1px solid #ff4444;border-radius:6px;color:#ff4444;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.06em;cursor:pointer;transition:all 0.2s">RESET SESSION</button>
         <div style="font-size:8px;color:#666;margin-top:8px;line-height:1.5">Clears open positions, alerts, cooldowns, and scan history for a fresh start. This cannot be undone. Tap once to arm, tap again to confirm.</div>
+      </div>
+    </div>
+  </div>
+  <!-- ── LIVE TRADE OVERLAY ── -->
+  <div id="lt-ov-bd" onclick="if(event.target===this)closeLiveOverlay()">
+    <div id="lt-ov-sheet">
+      <div id="lt-ov-hdr">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <span id="lt-ov-sym" style="font-family:'Bebas Neue',Impact,sans-serif;font-size:32px;color:#ffffff;line-height:1"></span>
+            <span id="lt-ov-tags" style="display:flex;gap:4px;flex-wrap:wrap"></span>
+          </div>
+          <div id="lt-ov-sub" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#ffffff;letter-spacing:0.08em;margin-bottom:4px"></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#ff4444;letter-spacing:0.08em">REAL CAPITAL AT RISK &#8212; THIS ORDER CANNOT BE UNDONE</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+          <button style="background:none;border:none;cursor:pointer;font-size:16px;color:#888;padding:0;line-height:1" onclick="closeLiveOverlay()">&#x2715;</button>
+          <div class="lt-cd-timer" id="lt-cd-timer">--:--</div>
+        </div>
+      </div>
+      <div id="lt-ov-body">
+        <div id="lt-ov-left" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;text-align:center;padding:40px">Loading&#8230;</div>
+        <div id="lt-ov-right"></div>
+      </div>
+      <div id="lt-ov-ftr">
+        <div id="lt-ov-confirm"></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;color:#ffffff;line-height:1.7;align-self:center">Submits a real order on MEXC.<br>Real capital at risk. Cannot be undone.</div>
       </div>
     </div>
   </div>
