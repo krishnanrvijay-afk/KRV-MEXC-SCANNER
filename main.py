@@ -61,6 +61,7 @@ _large_sl_cooldowns: dict[str, float] = {}   # "SYMBOLDIR" -> expiry ts for 90-m
 _peak_shadow: dict = {}   # trade_key -> shadow tracking state (observation only)
 _adverse_shadow: dict = {}  # trade_key -> adverse-cut shadow state (observation only)
 _sign_shadow:   dict = {}  # trade_key -> PnL-sign transition history (observation only)
+_signal_shadow: dict = {}  # trade_key -> signal invalidation shadow state (observation only)
 _prev_session:      str              = ""
 _mexc_account: dict = {}
 
@@ -357,7 +358,10 @@ def _load_state():
         for key, sh in (data.get("adverse_shadow") or {}).items():
             if key in app_state.open_trades:
                 _adverse_shadow[key] = sh
-        print(f"[RESTORE] shadow dicts -- peak={len(_peak_shadow)} adverse={len(_adverse_shadow)}")
+        for key, sh in (data.get("signal_shadow") or {}).items():
+            if key in app_state.open_trades:
+                _signal_shadow[key] = sh
+        print(f"[RESTORE] shadow dicts -- peak={len(_peak_shadow)} adverse={len(_adverse_shadow)}" + f" signal={len(_signal_shadow)}")
 
         # -- Restore cooldowns (filter expired) --------------------------------
         now     = time.time()
@@ -716,6 +720,11 @@ async def _do_open_trade(
         "extreme_price": None,
         "adverse_price": None,
         "chg24h":        alert_data.get("chg24h") if alert_data else None,
+        "btc_regime_entry":  _get_btc_regime(),
+        "stoch_k_fast":      alert_data.get("stoch_k_fast") if alert_data else None,
+        "stoch_d_fast":      alert_data.get("stoch_d_fast") if alert_data else None,
+        "btc_correlation":   _scanner_mod.BTC_CORRELATION.get(
+                                 symbol.replace("_USDT", ""), 0.75),
     }
 
     app_state.open_trades[key] = trade
@@ -1091,6 +1100,15 @@ def _pair_family(pair: str) -> str:
     return "OTHER"
 
 
+def _get_btc_regime() -> str:
+    """Compute current BTC regime from live _btc_j1h (same thresholds as state endpoint)."""
+    _j = _scanner_mod._btc_j1h
+    if _j > 80.0:              return "LONG_BLOCKED"
+    if _j < 20.0:              return "SHORT_BLOCKED"
+    if 40.0 <= _j <= 60.0:    return "NEUTRAL_BLOCK"
+    return "CLEAR"
+
+
 async def _write_peak_shadow_row(key: str, trade: dict, reason: str, final_pnl: float) -> None:
     try:
         sh = _peak_shadow.pop(key, None)
@@ -1187,6 +1205,55 @@ async def _write_adverse_shadow_row(key: str, trade: dict, reason: str,
         print("[ADVERSE SHADOW] write error: " + str(_ash_e))
 
 
+async def _write_signal_shadow_row(key: str, trade: dict, reason: str,
+                                    final_pnl: float, final_r: float) -> None:
+    """Write one row to signal_invalidation_shadow at trade close (venue=mexc)."""
+    try:
+        sh = _signal_shadow.pop(key, {})
+        sb = _get_supabase()
+        if sb is None:
+            return
+        opened_at  = trade.get("opened_at")
+        open_iso   = (datetime.fromtimestamp(opened_at, tz=timezone.utc).isoformat()
+                      if opened_at else None)
+        _sess_s    = trade.get("session") or (_get_session(opened_at) if opened_at else None)
+        _sym_s     = trade.get("symbol", "")
+        _corr_s    = trade.get("btc_correlation")
+        if _corr_s is None:
+            _corr_s = _scanner_mod.BTC_CORRELATION.get(_sym_s.replace("_USDT", ""), 0.75)
+        sb.table("signal_invalidation_shadow").insert({
+            "venue":                          "mexc",
+            "pair":                           _sym_s,
+            "direction":                      trade.get("direction", ""),
+            "pair_family":                    _pair_family(_sym_s),
+            "session_opened":                 _sess_s,
+            "open_time":                      open_iso,
+            "exit_reason":                    reason,
+            "final_pnl_dollars":              round(final_pnl, 2),
+            "final_r_value":                  round(final_r,   2),
+            "btc_correlation":                _corr_s,
+            "stochflip_triggered_at":         sh.get("stochflip_at"),
+            "stochflip_elapsed_min":          sh.get("stochflip_min"),
+            "stochflip_pnl_at_trigger":       sh.get("stochflip_pnl"),
+            "stochflip_sl_pct_at_trigger":    sh.get("stochflip_sl_pct"),
+            "jgiveback_triggered_at":         sh.get("jgiveback_at"),
+            "jgiveback_elapsed_min":          sh.get("jgiveback_min"),
+            "jgiveback_pnl_at_trigger":       sh.get("jgiveback_pnl"),
+            "jgiveback_sl_pct_at_trigger":    sh.get("jgiveback_sl_pct"),
+            "btcregime_triggered_at":         sh.get("btcregime_at"),
+            "btcregime_elapsed_min":          sh.get("btcregime_min"),
+            "btcregime_pnl_at_trigger":       sh.get("btcregime_pnl"),
+            "btcregime_sl_pct_at_trigger":    sh.get("btcregime_sl_pct"),
+            "btcregime_old_value":            sh.get("btcregime_old"),
+            "btcregime_new_value":            sh.get("btcregime_new"),
+        }).execute()
+        print("[SIG SHADOW] wrote signal_invalidation_shadow " + _sym_s
+              + " " + str(trade.get("direction")) + " reason=" + reason
+              + " pnl=$" + str(round(final_pnl, 2)))
+    except Exception as _siw_e:
+        print("[SIG SHADOW] write error: " + str(_siw_e))
+
+
 async def _write_sign_shadow_rows(key: str, trade: dict, reason: str,
                                    final_pnl: float) -> None:
     try:
@@ -1269,6 +1336,7 @@ def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
     asyncio.create_task(_write_peak_shadow_row(key, trade, reason, pnl))
     asyncio.create_task(_write_adverse_shadow_row(key, trade, reason, pnl, r))
     asyncio.create_task(_write_sign_shadow_rows(key, trade, reason, pnl))
+    asyncio.create_task(_write_signal_shadow_row(key, trade, reason, pnl, r))
     _save_state()
 
 
@@ -1356,6 +1424,7 @@ def _do_trailblazer_close(key: str, trade: dict, exit_price: float,
     asyncio.create_task(_write_peak_shadow_row(key, trade, "TRAILBLAZER", pnl))
     asyncio.create_task(_write_adverse_shadow_row(key, trade, "TRAILBLAZER", pnl, r))
     asyncio.create_task(_write_sign_shadow_rows(key, trade, "TRAILBLAZER", pnl))
+    asyncio.create_task(_write_signal_shadow_row(key, trade, "TRAILBLAZER", pnl, r))
     _save_state()
 
 
@@ -1504,6 +1573,91 @@ async def _exit_monitor_loop():
                         _ssb["last_sign"] = _ss_sign
                 except Exception as _sse:
                     print("[SIGN SHADOW] poll error: " + str(_sse))
+
+                # -- Signal invalidation shadow (observation only, no exit logic) --
+                try:
+                    _sis = _signal_shadow.setdefault(key, {
+                        "stochflip_at": None, "stochflip_min": None,
+                        "stochflip_pnl": None, "stochflip_sl_pct": None,
+                        "jgiveback_at": None, "jgiveback_min": None,
+                        "jgiveback_pnl": None, "jgiveback_sl_pct": None,
+                        "btcregime_at": None, "btcregime_min": None,
+                        "btcregime_pnl": None, "btcregime_sl_pct": None,
+                        "btcregime_old": None, "btcregime_new": None,
+                    })
+                    _sis_now  = datetime.now(timezone.utc).isoformat()
+                    _sis_ela  = (int(time.time()) - trade.get("opened_at", int(time.time()))) / 60.0
+                    _sis_sz   = trade.get("remaining_size", trade.get("size", 0)) or 0
+                    _sis_ent  = trade.get("entry_price", 0) or 0
+                    _sis_cpnl = ((current - _sis_ent) * _sis_sz if not is_short
+                                 else (_sis_ent - current) * _sis_sz)
+                    _sis_pnl  = round(_sis_cpnl, 2)
+                    _sis_sld  = (trade.get("sl_dist") or
+                                 abs(_sis_ent - (sl_price or _sis_ent)))
+                    _sis_toward_sl = ((_sis_ent - current) if not is_short
+                                      else (current - _sis_ent))
+                    _sis_sl_pct = (round(max(0.0, min(_sis_toward_sl / _sis_sld, 1.0)), 4)
+                                   if _sis_sld and _sis_ent else None)
+                    # 1. STOCH_FLIP: 8-3-3 fast K/D cross direction reverses from entry
+                    if _sis["stochflip_at"] is None:
+                        _sf_cur = _scanner_mod._last_stoch_fast.get(sym, (50.0, 50.0))
+                        _sf_ck, _sf_cd  = _sf_cur
+                        _sf_ek  = trade.get("stoch_k_fast")
+                        _sf_ed  = trade.get("stoch_d_fast")
+                        if _sf_ek is not None and _sf_ed is not None:
+                            _entry_k_above_d = _sf_ek > _sf_ed
+                            _cur_k_above_d   = _sf_ck > _sf_cd
+                            if _entry_k_above_d != _cur_k_above_d:
+                                _sis["stochflip_at"]     = _sis_now
+                                _sis["stochflip_min"]    = round(_sis_ela, 1)
+                                _sis["stochflip_pnl"]    = _sis_pnl
+                                _sis["stochflip_sl_pct"] = _sis_sl_pct
+                                print("[SIG SHADOW] STOCH_FLIP " + sym + " " + direction
+                                      + " entry_K=" + str(round(_sf_ek, 1))
+                                      + " entry_D=" + str(round(_sf_ed, 1))
+                                      + " cur_K="   + str(round(_sf_ck, 1))
+                                      + " cur_D="   + str(round(_sf_cd, 1))
+                                      + " elapsed=" + str(round(_sis_ela, 1)) + "m"
+                                      + " pnl=$" + str(_sis_pnl))
+                    # 2. J_GIVEBACK: current J15M crosses back past entry J15M adversely
+                    if _sis["jgiveback_at"] is None:
+                        _jg_ent_j = trade.get("j15m")
+                        _jg_ps    = next((p for p in app_state.pair_states
+                                          if p.get("symbol") == sym), None)
+                        _jg_cur_j = _jg_ps.get("j15m") if _jg_ps else None
+                        if _jg_ent_j is not None and _jg_cur_j is not None:
+                            _jgive = ((not is_short and _jg_cur_j < _jg_ent_j) or
+                                      (is_short      and _jg_cur_j > _jg_ent_j))
+                            if _jgive:
+                                _sis["jgiveback_at"]     = _sis_now
+                                _sis["jgiveback_min"]    = round(_sis_ela, 1)
+                                _sis["jgiveback_pnl"]    = _sis_pnl
+                                _sis["jgiveback_sl_pct"] = _sis_sl_pct
+                                print("[SIG SHADOW] J_GIVEBACK " + sym + " " + direction
+                                      + " entry_J=" + str(round(_jg_ent_j, 1))
+                                      + " cur_J="   + str(round(_jg_cur_j, 1))
+                                      + " elapsed=" + str(round(_sis_ela, 1)) + "m"
+                                      + " pnl=$" + str(_sis_pnl))
+                    # 3. BTC_REGIME_SHIFT: regime now contradicts trade direction
+                    if _sis["btcregime_at"] is None:
+                        _brs_entry  = trade.get("btc_regime_entry")
+                        _brs_cur    = _get_btc_regime()
+                        if _brs_entry is not None and _brs_cur != _brs_entry:
+                            _brs_contra = ((not is_short and _brs_cur in ("LONG_BLOCKED", "NEUTRAL_BLOCK")) or
+                                           (is_short     and _brs_cur in ("SHORT_BLOCKED", "NEUTRAL_BLOCK")))
+                            if _brs_contra:
+                                _sis["btcregime_at"]     = _sis_now
+                                _sis["btcregime_min"]    = round(_sis_ela, 1)
+                                _sis["btcregime_pnl"]    = _sis_pnl
+                                _sis["btcregime_sl_pct"] = _sis_sl_pct
+                                _sis["btcregime_old"]    = _brs_entry
+                                _sis["btcregime_new"]    = _brs_cur
+                                print("[SIG SHADOW] BTC_REGIME_SHIFT " + sym + " " + direction
+                                      + " " + str(_brs_entry) + " -> " + str(_brs_cur)
+                                      + " elapsed=" + str(round(_sis_ela, 1)) + "m"
+                                      + " pnl=$" + str(_sis_pnl))
+                except Exception as _sis_e:
+                    print("[SIG SHADOW] poll error: " + str(_sis_e))
                 # -- SL breach --------------------------------------------------
                 # SHORT: SL triggers when price RISES above sl_price
                 # LONG : SL triggers when price FALLS below sl_price
@@ -1967,6 +2121,7 @@ async def close_trade(req: CloseTradeRequest):
     _append_trade_log(trade, close_price, "MANUAL", pnl, r)
     _update_daily_pnl(pnl)
     _on_trade_close("MANUAL")
+    asyncio.create_task(_write_signal_shadow_row(key, trade, "MANUAL", pnl, r))
 
     app_state.margin_deployed = max(0.0, app_state.margin_deployed - trade["margin"])
     closed = {**trade, "close_price": close_price, "final_pnl": round(pnl, 2)}
