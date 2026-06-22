@@ -53,6 +53,7 @@ import mexc_api as _mexc_api
 TELEGRAM_BOT_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID    = int(os.environ.get("TELEGRAM_CHAT_ID", "0") or "0")
 TELEGRAM_ENABLED    = os.environ.get("TELEGRAM_ENABLED", "true").lower() == "true"
+SENTINEL_MIN_PEAK_USD = 5.00  # minimum peak before decay watching activates — ensures locked amount always exceeds MEXC exit fee (0.02% taker on $10k notional = $2.00)
 _digest_task = None  # type: ignore
 _stale_tg_sent: set[str] = set()  # symbols for which stale-price TG alert was already sent
 _session_sl_counts: dict[str, int]   = {}    # "SYMBOL_DIRECTION_SESSION" -> SL count
@@ -1829,7 +1830,7 @@ async def _exit_monitor_loop():
                         continue
 
                 # -- NEAR_USDT peak-decay real exit (Sentinel) ------------------
-                if not tp1_hit and _sh["be_armed"]:
+                if not tp1_hit and _sh["be_armed"] and _sh["peak_pnl_usd"] >= SENTINEL_MIN_PEAK_USD:
                     _decay_threshold = 0.70 if sym in ("@107",) else 0.80
                     if _cpnl < _sh["peak_pnl_usd"] * _decay_threshold:
                         # NOTE: PAPER_MODE-only as of this build. If PAPER_MODE is ever
