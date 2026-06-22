@@ -483,9 +483,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                 else:
                     continue
 
-                if score == 4 and adx1h < 20:
-                    print(f"[ENTRY GATE] {symbol} {direction} blocked — Score 4 + ADX {adx1h:.1f} < 20")
-                    continue
 
                 if adx1h > ADX_FADE_MAX:
                     log.info(f"[SKIP] {symbol} {direction} adx={adx1h:.1f} exceeds fade max {ADX_FADE_MAX} - trend too strong to fade")
