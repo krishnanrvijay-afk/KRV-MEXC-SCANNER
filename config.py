@@ -52,6 +52,7 @@ MARGIN_PER_TRADE = 2000.0
 MARGIN_HARD_CAP  = 25000.0
 
 ADX_FADE_MAX = 60
+ADX_MIN = 15  # minimum ADX for any entry -- below this market has no structure for bounce signals
 
 SESSION_FILTER_ENABLED = False
 PLACE_EXCHANGE_SL      = True
