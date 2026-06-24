@@ -68,3 +68,19 @@ MIN_SL_PCT: dict = {
     "ARB":  0.012,
 }
 MIN_SL_PCT_DEFAULT = 0.010
+# Per-pair per-session Sentinel minimum peak thresholds
+# Derived from p25 winner MFE per pair x $10k notional
+# ASIA scaled to 60% -- winner peaks smaller in ASIA session
+# Reviewed and updated first Monday of each month
+SENTINEL_MIN_PEAK_USD: dict = {
+    ("NEAR_USDT",  "ASIA"): 5.00,  ("NEAR_USDT",  "EU"): 5.00,  ("NEAR_USDT",  "US"): 5.00,
+    ("WIF_USDT",   "ASIA"): 20.00, ("WIF_USDT",   "EU"): 33.00, ("WIF_USDT",   "US"): 25.00,
+    ("HYPE_USDT",  "ASIA"): 29.00, ("HYPE_USDT",  "EU"): 48.00, ("HYPE_USDT",  "US"): 36.00,
+    ("ETH_USDT",   "ASIA"): 35.00, ("ETH_USDT",   "EU"): 59.00, ("ETH_USDT",   "US"): 44.00,
+    ("DOGE_USDT",  "ASIA"): 18.00, ("DOGE_USDT",  "EU"): 30.00, ("DOGE_USDT",  "US"): 23.00,
+    ("BTC_USDT",   "ASIA"): 40.00, ("BTC_USDT",   "EU"): 66.00, ("BTC_USDT",   "US"): 50.00,
+    ("XRP_USDT",   "ASIA"): 39.00, ("XRP_USDT",   "EU"): 65.00, ("XRP_USDT",   "US"): 49.00,
+    ("LTC_USDT",   "ASIA"): 18.00, ("LTC_USDT",   "EU"): 30.00, ("LTC_USDT",   "US"): 23.00,
+    ("ADA_USDT",   "ASIA"): 18.00, ("ADA_USDT",   "EU"): 30.00, ("ADA_USDT",   "US"): 23.00,
+}
+SENTINEL_MIN_PEAK_USD_DEFAULT: float = 18.00  # ASIA-safe default
