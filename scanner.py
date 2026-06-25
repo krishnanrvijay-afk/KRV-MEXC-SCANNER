@@ -671,12 +671,12 @@ async def scan_pair_state(client) -> list[dict]:
 
             short_score, short_tier, short_lev = score_bounce_short(
                 j15m, j1h, rsi15m, ask_pct, adx1h, j5m=j5m, trend=trend,
-                stoch_k=stoch_k, stoch_d=stoch_d,
-                stoch_k_prev=stoch_k_prev, stoch_d_prev=stoch_d_prev)
+                stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
+                stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
             long_score,  long_tier,  long_lev  = score_bounce_long(
                 j15m, j1h, rsi15m, bid_pct, adx1h, j5m=j5m, trend=trend,
-                stoch_k=stoch_k, stoch_d=stoch_d,
-                stoch_k_prev=stoch_k_prev, stoch_d_prev=stoch_d_prev)
+                stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
+                stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
 
             states.append({
                 "symbol":      symbol,
