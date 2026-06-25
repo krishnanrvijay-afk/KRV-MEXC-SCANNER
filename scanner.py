@@ -6,7 +6,7 @@ from typing import Optional
 import os as _os
 
 from config import (
-    PAIRS, J15M_SHORT_GATE, J15M_LONG_GATE, J1H_SHORT_MIN, J1H_SHORT_MAX, J1H_LONG_MAX, J1H_LONG_MIN,
+    PAIRS, J15M_SHORT_GATE, J15M_LONG_GATE, J1H_SHORT_MIN, J1H_SHORT_MAX, J1H_LONG_MIN,
     RSI15M_SHORT_MIN, RSI15M_LONG_MAX, DEPTH_GATE_PCT, ATR_SL_MULTIPLIER,
     TP1_R, TP2_R, LEVERAGE_HIGH, LEVERAGE_MID, LEVERAGE_LOW,
     COOLDOWN_SECONDS, ADX_FADE_MAX, ADX_MIN, PAPER_MODE, CONSECUTIVE_LOSS_STOP,
@@ -260,7 +260,7 @@ def score_bounce_long(j15m, j1h, rsi15m, bid_pct, adx,
                       stoch_k_prev: float = 50.0, stoch_d_prev: float = 50.0) -> tuple[int, str, int]:
     tier, lev = _leverage_tier(adx)
     stoch_gate = stoch_k < 25 and stoch_k > stoch_d and stoch_k_prev <= stoch_d_prev
-    if not (j15m < J15M_LONG_GATE and j1h < J1H_LONG_MAX and j1h >= J1H_LONG_MIN
+    if not (j15m < J15M_LONG_GATE and j1h >= J1H_LONG_MIN
             and stoch_gate and bid_pct >= DEPTH_GATE_PCT and adx >= ADX_MIN):
         return 0, tier, lev
     score = 4
@@ -498,7 +498,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                                  f"ask={ask_pct:.1f}%(need>={DEPTH_GATE_PCT}%)")
                 else:
                     g_j15m  = j15m < J15M_LONG_GATE
-                    g_j1h   = j1h  < J1H_LONG_MAX
+                    g_j1h   = j1h  >= J1H_LONG_MIN
                     g_stoch = stoch_k < 25 and stoch_k > stoch_d
 
                     g_depth = bid_pct >= DEPTH_GATE_PCT
@@ -510,7 +510,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                         stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
                         stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
                     log_gates = (f"j15m={j15m:.1f}(need<{J15M_LONG_GATE}) "
-                                 f"j1h={j1h:.1f}(need<{J1H_LONG_MAX}) "
+                                 f"j1h={j1h:.1f}(need>={J1H_LONG_MIN}) "
                                  f"stoch_k={stoch_k:.1f}/stoch_d={stoch_d:.1f}(need<25,k>d) "
                                  f"bid={bid_pct:.1f}%(need>={DEPTH_GATE_PCT}%)")
 
@@ -543,7 +543,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                     elif direction == "SHORT" and not (j15m > J15M_SHORT_GATE and j1h > J1H_SHORT_MIN):
                         asyncio.create_task(_log_gate("MEXC", symbol, "J1H_GATE", direction,
                             f"j1h={j1h:.1f} j15m={j15m:.1f}"))
-                    elif direction == "LONG" and not (j15m < J15M_LONG_GATE and j1h < J1H_LONG_MAX):
+                    elif direction == "LONG" and not (j15m < J15M_LONG_GATE and j1h >= J1H_LONG_MIN):
                         asyncio.create_task(_log_gate("MEXC", symbol, "J1H_GATE", direction,
                             f"j1h={j1h:.1f} j15m={j15m:.1f}"))
                     else:
@@ -760,7 +760,7 @@ def log_startup_config():
     log.info(
         f"[CONFIG] PAIRS={len(PAIRS)} "
         f"J15M_SHORT={J15M_SHORT_GATE} J15M_LONG={J15M_LONG_GATE} "
-        f"J1H_SHORT_MIN={J1H_SHORT_MIN} J1H_LONG_MAX={J1H_LONG_MAX} "
+        f"J1H_SHORT_MIN={J1H_SHORT_MIN} J1H_LONG_MIN={J1H_LONG_MIN} "
         f"RSI_SHORT={RSI15M_SHORT_MIN} RSI_LONG={RSI15M_LONG_MAX} "
         f"DEPTH={DEPTH_GATE_PCT}% ATR_SL={ATR_SL_MULTIPLIER}x "
         f"ADX_FADE_MAX={ADX_FADE_MAX} "
