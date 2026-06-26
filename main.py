@@ -2634,6 +2634,40 @@ async def post_settings(request: Request):
         _scanner_mod.J1H_SHORT_MIN = float(body["j1h_short_min"])
     return await get_settings()
 
+# -- Bot identity ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/bot-identity")
+async def get_bot_identity():
+    """Return current bot identity and whether it has been committed to Supabase."""
+    return {"bot_instance_id": BOT_INSTANCE_ID, "committed": _BOT_IDENTITY_COMMITTED}
+
+
+@app.post("/api/bot-identity/set")
+async def set_bot_identity(request: Request):
+    """Commit or update the bot instance name.  No restart required."""
+    global BOT_INSTANCE_ID, _BOT_IDENTITY_COMMITTED
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name must be a non-empty string")
+    if ":" in name:
+        raise HTTPException(status_code=400, detail="name must not contain ':' (used as lock key delimiter)")
+    sb = _get_supabase()
+    if sb:
+        try:
+            sb.table("bot_identity").upsert({
+                "exchange":        "MEXC",
+                "bot_instance_id": name,
+                "set_at":          datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception as _e:
+            print(f"[BOT IDENTITY] Supabase upsert failed: {_e}")
+    BOT_INSTANCE_ID = name
+    _BOT_IDENTITY_COMMITTED = True
+    print(f"[BOT IDENTITY] Updated to: {name} (committed)")
+    return {"bot_instance_id": BOT_INSTANCE_ID, "committed": _BOT_IDENTITY_COMMITTED}
+
+
 # -- Daily reset ---------------------------------------------------------------
 
 @app.post("/api/reset-day")
