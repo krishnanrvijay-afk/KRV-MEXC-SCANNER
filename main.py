@@ -1953,8 +1953,12 @@ async def _exit_monitor_loop():
                         # await mexc_client.close_position(sym, direction, trade.get("remaining_size", trade.get("size", 0)))
                         # BEFORE _do_close_trade below — otherwise the real exchange
                         # position stays open while internal state shows it closed.
-                        _do_close_trade(key, trade, current, "PEAK_DECAY_20")
-                        continue
+                        if is_short:
+                            _do_close_trade(key, trade, current, "PEAK_DECAY_20")
+                            continue
+                        # LONG: PEAK_DECAY_20 suppressed
+                        # June 26 2026 -- letting LONGs run to TP1/TRAILBLAZER/SL
+                        # Re-enable: remove is_short guard and restore original two lines
 
                 # -- TRAILBLAZER: ATR trailing stop after tp1_hit --------------
                 if tp1_hit:
