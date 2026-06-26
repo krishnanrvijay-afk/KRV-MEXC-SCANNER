@@ -239,7 +239,7 @@ def _leverage_tier(adx: float) -> tuple[str, int]:
     return "REGULAR", LEVERAGE_LOW
 
 
-def score_bounce_short(j15m, j1h, rsi15m, ask_pct, adx,
+def score_bounce_short(j15m, j1h, ask_pct, adx,
                        j5m: float = 50.0, trend: str = "Neutral",
                        stoch_k: float = 50.0, stoch_d: float = 50.0,
                        stoch_k_prev: float = 50.0, stoch_d_prev: float = 50.0) -> tuple[int, str, int]:
@@ -257,7 +257,7 @@ def score_bounce_short(j15m, j1h, rsi15m, ask_pct, adx,
     return score, tier, lev
 
 
-def score_bounce_long(j15m, j1h, rsi15m, bid_pct, adx,
+def score_bounce_long(j15m, j1h, bid_pct, adx,
                       j5m: float = 50.0, trend: str = "Neutral",
                       stoch_k: float = 50.0, stoch_d: float = 50.0,
                       stoch_k_prev: float = 50.0, stoch_d_prev: float = 50.0) -> tuple[int, str, int]:
@@ -518,7 +518,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                         log.info(f"[REGIME] {symbol} SHORT blocked - BTC J1H={_btc_j1h:.1f} corr={_pair_corr}")
                         continue
                     score, tier, lev = score_bounce_short(
-                        j15m, j1h, rsi15m, ask_pct, adx1h, j5m=j5m, trend=trend,
+                        j15m, j1h, ask_pct, adx1h, j5m=j5m, trend=trend,
                         stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
                         stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
                     log_gates = (f"j15m={j15m:.1f}(need>{J15M_SHORT_GATE}) "
@@ -535,21 +535,13 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                         log.info(f"[REGIME] {symbol} LONG blocked - BTC J1H={_btc_j1h:.1f} corr={_pair_corr}")
                         continue
                     score, tier, lev = score_bounce_long(
-                        j15m, j1h, rsi15m, bid_pct, adx1h, j5m=j5m, trend=trend,
+                        j15m, j1h, bid_pct, adx1h, j5m=j5m, trend=trend,
                         stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
                         stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
                     log_gates = (f"j15m={j15m:.1f}(need<{J15M_LONG_GATE}) "
                                  f"j1h={j1h:.1f}(need>={J1H_LONG_MIN}) "
                                  f"stoch_k={stoch_k:.1f}/stoch_d={stoch_d:.1f}(need<25,k>d) "
                                  f"bid={bid_pct:.1f}%(need>={DEPTH_GATE_PCT}%)")
-
-                if symbol == "ZEC_USDT":
-                    if direction == "SHORT" and j1h > 60 and adx1h > 35:
-                        log.info(f"[ZEC GATE] ZEC_USDT SHORT blocked -- J1H={j1h:.1f} > 60 AND ADX={adx1h:.1f} > 35")
-                        continue
-                    if direction == "LONG" and j1h < 40 and adx1h > 35:
-                        log.info(f"[ZEC GATE] ZEC_USDT LONG blocked -- J1H={j1h:.1f} < 40 AND ADX={adx1h:.1f} > 35")
-                        continue
 
                 # -- GATE3 log - every scan when >= 3 of 4 gates pass ------------
                 _gate_list  = [g_j15m, g_j1h, g_stoch, g_depth]
@@ -702,11 +694,11 @@ async def scan_pair_state(client) -> list[dict]:
             bid_pct, ask_pct = _depth_pcts(book)
 
             short_score, short_tier, short_lev = score_bounce_short(
-                j15m, j1h, rsi15m, ask_pct, adx1h, j5m=j5m, trend=trend,
+                j15m, j1h, ask_pct, adx1h, j5m=j5m, trend=trend,
                 stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
                 stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
             long_score,  long_tier,  long_lev  = score_bounce_long(
-                j15m, j1h, rsi15m, bid_pct, adx1h, j5m=j5m, trend=trend,
+                j15m, j1h, bid_pct, adx1h, j5m=j5m, trend=trend,
                 stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
                 stoch_k_prev=stoch_k_prev_fast, stoch_d_prev=stoch_d_prev_fast)
 
