@@ -1689,6 +1689,24 @@ async def _exit_monitor_loop():
                           f"was profitable, now zero, cutting")
                     _do_close_trade(key, trade, current, "BE_CUT")
                     continue
+                # -- ANCHOR time exit: 90 minutes max duration
+                _anchor_pairs = {
+                    "BTC", "ETH", "SOL",
+                    "BTC_USDT", "ETH_USDT", "SOL_USDT"
+                }
+                if sym in _anchor_pairs:
+                    _open_ts = trade.get("opened_at")
+                    if _open_ts:
+                        _elapsed = time.time() - _open_ts
+                        if _elapsed >= 5400:
+                            print(f"[ANCHOR_TIME_EXIT] {sym} "
+                                  f"{direction} "
+                                  f"elapsed={_elapsed:.0f}s "
+                                  f"cpnl={_cpnl:.2f} -- "
+                                  f"90min exceeded, exiting")
+                            _do_close_trade(key, trade,
+                                            current, "ANCHOR_TIME_EXIT")
+                            continue
                 if _adv_pnl <= -_cut_usd and _mfe_pnl < 10.0:
                     print(f"[ADVERSE_CUT] {sym} {direction} adv_pnl={_adv_pnl:.2f} cut={_cut_usd} mfe={_mfe_pnl:.2f} - closing")
                     _do_close_trade(key, trade, current, "ADVERSE_CUT")
@@ -1966,9 +1984,17 @@ async def _exit_monitor_loop():
                         if is_short:
                             _do_close_trade(key, trade, current, "PEAK_DECAY_20")
                             continue
-                        # LONG: PEAK_DECAY_20 suppressed
-                        # June 26 2026 -- letting LONGs run to TP1/TRAILBLAZER/SL
-                        # Re-enable: remove is_short guard and restore original two lines
+                        # LONG: PEAK_DECAY suppressed except ANCHORS
+                        if sym in _anchor_pairs:
+                            _anchor_decay = 0.90
+                            if _cpnl < _sh["peak_pnl_usd"] * _anchor_decay:
+                                print(f"[PEAK_DECAY_10] {sym} LONG "
+                                      f"peak={_sh['peak_pnl_usd']:.2f} "
+                                      f"cpnl={_cpnl:.2f} -- "
+                                      f"anchor 10pct decay, exiting")
+                                _do_close_trade(key, trade, current,
+                                                "PEAK_DECAY_10")
+                                continue
 
                 # -- TRAILBLAZER: ATR trailing stop after tp1_hit --------------
                 if tp1_hit:
