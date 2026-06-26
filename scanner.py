@@ -678,8 +678,11 @@ async def scan_pair_state(client) -> list[dict]:
             await asyncio.sleep(0.5)  # rate-limit spacing between pairs
             candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
             if not price:
-                states.append({"symbol": symbol, "price": 0})
-                continue
+                await asyncio.sleep(2)
+                price = await client.get_price(symbol)
+                if not price:
+                    states.append({"symbol": symbol, "price": 0})
+                    continue
 
             _, _, j5m  = _compute_kdj(candles_5m)
             _, _, j15m = _compute_kdj(candles_15m)
