@@ -82,5 +82,8 @@ SENTINEL_MIN_PEAK_USD: dict = {
     ("XRP_USDT",   "ASIA"): 39.00, ("XRP_USDT",   "EU"): 65.00, ("XRP_USDT",   "US"): 49.00,
     ("LTC_USDT",   "ASIA"): 18.00, ("LTC_USDT",   "EU"): 30.00, ("LTC_USDT",   "US"): 23.00,
     ("ADA_USDT",   "ASIA"): 18.00, ("ADA_USDT",   "EU"): 30.00, ("ADA_USDT",   "US"): 23.00,
+    ("SOL_USDT",   "ASIA"): 30.00, ("SOL_USDT",   "EU"): 36.00, ("SOL_USDT",   "US"): 40.00,
+    ("AVAX_USDT",  "ASIA"): 17.00, ("AVAX_USDT",  "EU"): 20.00, ("AVAX_USDT",  "US"): 20.00,
+    ("SUI_USDT",   "ASIA"): 17.00, ("SUI_USDT",   "EU"): 25.00, ("SUI_USDT",   "US"): 20.00,
 }
 SENTINEL_MIN_PEAK_USD_DEFAULT: float = 18.00  # ASIA-safe default
