@@ -472,6 +472,9 @@ def _load_state():
                 data["consecutive_loss_stop"])
             _scanner_mod.CONSECUTIVE_LOSS_STOP = \
                 CONSECUTIVE_LOSS_STOP
+        if data.get("kill_cooldown_seconds") is not None:
+            _scanner_mod.KILL_COOLDOWN_SECONDS = int(
+                data["kill_cooldown_seconds"])
         print(f"[RESTORE] settings restored "
               f"from Supabase")
 
@@ -1785,6 +1788,9 @@ async def _exit_monitor_loop():
                 if _elapsed >= 60 and _cpnl <= 0:
                     _do_close_trade(
                         key, trade, current, "KILL")
+                    _scanner_mod.set_close_cooldown(
+                        sym, direction,
+                        _scanner_mod.KILL_COOLDOWN_SECONDS)
                     continue
                 # -- ANCHOR time exit: 90 minutes max duration
                 _anchor_pairs = {
@@ -2747,6 +2753,8 @@ async def get_settings():
             DAILY_LOSS_LIMIT,
         "consecutive_loss_stop":
             CONSECUTIVE_LOSS_STOP,
+        "kill_cooldown_seconds":
+            _scanner_mod.KILL_COOLDOWN_SECONDS,
     }
 
 
@@ -2803,6 +2811,9 @@ async def post_settings(request: Request):
             body["consecutive_loss_stop"])
         _scanner_mod.CONSECUTIVE_LOSS_STOP = \
             CONSECUTIVE_LOSS_STOP
+    if "kill_cooldown_seconds" in body:
+        _scanner_mod.KILL_COOLDOWN_SECONDS = int(
+            body["kill_cooldown_seconds"])
 
     # Persist ALL settings to Supabase
     # NOTE: columns require migration if not yet in schema.
@@ -2838,6 +2849,8 @@ async def post_settings(request: Request):
                     DAILY_LOSS_LIMIT,
                 "consecutive_loss_stop":
                     CONSECUTIVE_LOSS_STOP,
+                "kill_cooldown_seconds":
+                    _scanner_mod.KILL_COOLDOWN_SECONDS,
             }
             _settings_payload["id"] = 1
             _sb.table("mexc_scanner_state")\
