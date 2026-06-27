@@ -7,7 +7,6 @@ import os as _os
 
 from config import (
     PAIRS, J15M_SHORT_GATE, J15M_LONG_GATE, J1H_SHORT_MIN, J1H_SHORT_MAX, J1H_LONG_MIN,
-    BTC_J1H_LONG_MAX, BTC_J1H_SHORT_MAX,
     RSI15M_SHORT_MIN, RSI15M_LONG_MAX, DEPTH_GATE_PCT, ATR_SL_MULTIPLIER,
     TP1_R, TP2_R, LEVERAGE_HIGH, LEVERAGE_MID, LEVERAGE_LOW,
     ADX_MIN_LONG, ADX_MIN_SHORT, PAPER_MODE, CONSECUTIVE_LOSS_STOP,
@@ -438,11 +437,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
             _sym_base = symbol.replace("_USDT", "")
             _pair_corr = BTC_CORRELATION.get(_sym_base, 0.75)
             _regime_block_short = _regime_block_long = False
-            if _pair_corr >= 0.65:
-                if _btc_j1h >= BTC_J1H_LONG_MAX:
-                    _regime_block_long  = True
-                if _btc_j1h >= BTC_J1H_SHORT_MAX:
-                    _regime_block_short = True
             # -- Component A: BTC fast stoch flash detector -----------------
             _btc_fast         = _last_stoch_fast.get("BTC_USDT", (50.0, 50.0))
             _btc_fk, _btc_fd  = _btc_fast
