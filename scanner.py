@@ -441,7 +441,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
             _pair_corr = BTC_CORRELATION.get(_sym_base, 0.75)
             _regime_block_short = _regime_block_long = False
             if _pair_corr >= 0.65:
-                if _btc_j1h > BTC_J1H_LONG_MAX:
+                if _btc_j1h >= BTC_J1H_LONG_MAX:
                     _regime_block_long  = True
                 if _btc_j1h >= BTC_J1H_SHORT_MAX:
                     _regime_block_short = True
