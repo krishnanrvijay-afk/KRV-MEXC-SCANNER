@@ -9,7 +9,7 @@ from config import (
     PAIRS, J15M_SHORT_GATE, J15M_LONG_GATE, J1H_SHORT_MIN, J1H_SHORT_MAX, J1H_LONG_MIN,
     RSI15M_SHORT_MIN, RSI15M_LONG_MAX, DEPTH_GATE_PCT, ATR_SL_MULTIPLIER,
     TP1_R, TP2_R, LEVERAGE_HIGH, LEVERAGE_MID, LEVERAGE_LOW,
-    COOLDOWN_SECONDS, ADX_FADE_MAX, ADX_MIN, PAPER_MODE, CONSECUTIVE_LOSS_STOP,
+    ADX_MIN_LONG, ADX_MIN_SHORT, PAPER_MODE, CONSECUTIVE_LOSS_STOP,
     MIN_SL_PCT, MIN_SL_PCT_DEFAULT, MARGIN_PER_TRADE,
 )
 
@@ -244,16 +244,14 @@ def score_bounce_short(j15m, j1h, ask_pct, adx,
                        stoch_k: float = 50.0, stoch_d: float = 50.0,
                        stoch_k_prev: float = 50.0, stoch_d_prev: float = 50.0) -> tuple[int, str, int]:
     tier, lev = _leverage_tier(adx)
-    stoch_gate = stoch_k > 75 and stoch_k < stoch_d and stoch_k_prev >= stoch_d_prev
+    stoch_gate = stoch_k > 75 and stoch_k <= 84 and stoch_k < stoch_d and stoch_k_prev >= stoch_d_prev
     if not (j15m > J15M_SHORT_GATE and j1h > J1H_SHORT_MIN and j1h <= J1H_SHORT_MAX
-            and stoch_gate and ask_pct >= DEPTH_GATE_PCT and adx >= ADX_MIN):
+            and stoch_gate and ask_pct >= DEPTH_GATE_PCT and adx >= ADX_MIN_SHORT):
         return 0, tier, lev
     score = 4
     if j5m  > 80:              score += 2
     if trend == "Strong Bear": score += 2
     if adx  >= 40:             score += 2
-    if score >= 10:
-        lev, tier = min(25, max(lev, 10)), "HIGH_CONVICTION"
     return score, tier, lev
 
 
@@ -264,14 +262,12 @@ def score_bounce_long(j15m, j1h, bid_pct, adx,
     tier, lev = _leverage_tier(adx)
     stoch_gate = stoch_k < 25 and stoch_k > stoch_d and stoch_k_prev <= stoch_d_prev
     if not (j15m < J15M_LONG_GATE and j1h >= J1H_LONG_MIN
-            and stoch_gate and bid_pct >= DEPTH_GATE_PCT and adx >= ADX_MIN):
+            and stoch_gate and bid_pct >= DEPTH_GATE_PCT and adx >= ADX_MIN_LONG):
         return 0, tier, lev
     score = 4
     if j5m  < 20:              score += 2
     if trend == "Strong Bull": score += 2
     if adx  >= 40:             score += 2
-    if score >= 10:
-        lev, tier = min(25, max(lev, 10)), "HIGH_CONVICTION"
     return score, tier, lev
 
 
@@ -444,9 +440,10 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
             _pair_corr = BTC_CORRELATION.get(_sym_base, 0.75)
             _regime_block_short = _regime_block_long = False
             if _pair_corr >= 0.65:
-                if   _btc_j1h < 20:            _regime_block_short = True
-                elif 40 <= _btc_j1h <= 60:     _regime_block_short = _regime_block_long = True
-                elif _btc_j1h > 80:            _regime_block_long  = True
+                if _btc_j1h >= 60:
+                    _regime_block_long  = True
+                if _btc_j1h >= 90:
+                    _regime_block_short = True
             # -- Component A: BTC fast stoch flash detector -----------------
             _btc_fast         = _last_stoch_fast.get("BTC_USDT", (50.0, 50.0))
             _btc_fk, _btc_fd  = _btc_fast
@@ -506,11 +503,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
             for direction in ("SHORT", "LONG"):
                 key = f"{symbol}{direction}"
 
-                _cd = get_cooldown_remaining(symbol, direction)
-                if _cd > 0:
-                    asyncio.create_task(_log_gate("MEXC", symbol, "COOLDOWN", direction,
-                        f"cooldown {_cd:.0f}s remaining"))
-                    continue
 
                 if direction == "SHORT":
                     g_j15m  = j15m > J15M_SHORT_GATE
@@ -562,9 +554,10 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                 if score >= 4:
                     log.info(f"[SCORE] {symbol} {direction} gates=PASS score={score} {log_gates}")
                 else:
-                    if adx1h < ADX_MIN:
+                    if (direction == "LONG" and adx1h < ADX_MIN_LONG) or \
+                            (direction == "SHORT" and adx1h < ADX_MIN_SHORT):
                         asyncio.create_task(_log_gate("MEXC", symbol, "ADX_GATE", direction,
-                            f"ADX {adx1h:.1f} < ADX_MIN {ADX_MIN}"))
+                            f"ADX {adx1h:.1f} below min for {direction}"))
                     elif direction == "SHORT" and not (j15m > J15M_SHORT_GATE and j1h > J1H_SHORT_MIN):
                         asyncio.create_task(_log_gate("MEXC", symbol, "J1H_GATE", direction,
                             f"j1h={j1h:.1f} j15m={j15m:.1f}"))
@@ -576,14 +569,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                             f"stoch_k={stoch_k:.1f} stoch_d={stoch_d:.1f}"))
                     continue
 
-
-                if adx1h > ADX_FADE_MAX:
-                    log.info(f"[SKIP] {symbol} {direction} adx={adx1h:.1f} exceeds fade max {ADX_FADE_MAX} - trend too strong to fade")
-                    asyncio.create_task(_log_gate("MEXC", symbol, "ADX_FADE", direction,
-                        f"ADX {adx1h:.1f} > ADX_FADE_MAX {ADX_FADE_MAX}"))
-                    continue
-
-                # Compute SL / TP prices (HC score-10: 2.5R TP1, 3.5R TP2)
                 is_hc = score >= 10
                 if direction == "SHORT":
                     sl_price = round(price + sl_dist, 6)
@@ -791,7 +776,6 @@ def log_startup_config():
         f"J1H_SHORT_MIN={J1H_SHORT_MIN} J1H_LONG_MIN={J1H_LONG_MIN} "
         f"RSI_SHORT={RSI15M_SHORT_MIN} RSI_LONG={RSI15M_LONG_MAX} "
         f"DEPTH={DEPTH_GATE_PCT}% ATR_SL={ATR_SL_MULTIPLIER}x "
-        f"ADX_FADE_MAX={ADX_FADE_MAX} "
-        f"COOLDOWN={COOLDOWN_SECONDS//60}min "
+        f"ADX_MIN_LONG={ADX_MIN_LONG} ADX_MIN_SHORT={ADX_MIN_SHORT} "
         f"CIRCUIT_BREAKER={CONSECUTIVE_LOSS_STOP} PAPER={PAPER_MODE}"
     )
