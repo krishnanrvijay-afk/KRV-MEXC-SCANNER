@@ -274,7 +274,7 @@ def score_bounce_long(j15m, j1h, bid_pct, adx,
 # -- Cooldown helpers ----------------------------------------------------------
 
 def set_close_cooldown(symbol: str, direction: str):
-    _cooldowns[f"{symbol}{direction}"] = time.time() + COOLDOWN_SECONDS
+    _cooldowns[f"{symbol}{direction}"] = time.time() + 300  # cooldown still written for large-SL gate in main.py
 
 
 def get_cooldown_remaining(symbol: str, direction: str) -> int:
