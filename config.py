@@ -54,6 +54,15 @@ ADX_MIN_LONG  = 20  # data: LONG ADX 0-19: 119 trades -$2,391
 ADX_MIN_SHORT = 0   # data: SHORT ADX 0-14: 21 trades +$493. SHORTs profitable at all ADX levels
 
 SESSION_FILTER_ENABLED = False
+BLOCKED_PAIR_SESSIONS: dict = {
+    # HYPE_USDT LONG ASIA:
+    # archive 11 trades -$178.02
+    # live today 6 kills -$186.49
+    # avg MAE -0.330R
+    # HYPE_USDT LONG US: +$262.10
+    ("HYPE_USDT", "LONG", "ASIA"): True,
+}
+
 PLACE_EXCHANGE_SL      = True
 
 MIN_SL_PCT: dict = {
