@@ -12,6 +12,7 @@ from config import (
     ADX_MIN_LONG, ADX_MIN_SHORT, PAPER_MODE, CONSECUTIVE_LOSS_STOP,
     MIN_SL_PCT, MIN_SL_PCT_DEFAULT, MARGIN_PER_TRADE,
     KILL_COOLDOWN_SECONDS,
+    BLOCKED_PAIR_SESSIONS,
 )
 
 log = logging.getLogger("scanner")
@@ -503,6 +504,19 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
 
             for direction in ("SHORT", "LONG"):
                 key = f"{symbol}{direction}"
+                _cur_sess = get_session_name()
+                if BLOCKED_PAIR_SESSIONS.get(
+                        (symbol, direction, _cur_sess),
+                        False):
+                    asyncio.create_task(
+                        _log_gate(
+                            "MEXC", symbol,
+                            "SESSION_BLOCK",
+                            direction,
+                            f"blocked: {symbol} "
+                            f"{direction} "
+                            f"{_cur_sess}"))
+                    continue
                 _cd = get_cooldown_remaining(
                     symbol, direction)
                 if _cd > 0:
