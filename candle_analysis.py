@@ -1,3 +1,4 @@
+import csv
 import requests
 from datetime import datetime, timezone
 
@@ -58,16 +59,16 @@ def calc_pnl(entry, close, direction, margin=5000, lev=5):
         return round((entry - close) * size, 2)
 
 def zone(j):
-    if j < 30:  return "BEARISH "
+    if j < 30:  return "BEARISH"
     if j < 70:  return "UNDECIDED"
-    return "BULLISH  "
+    return "BULLISH"
 
 def fmt_ts(ts):
     return datetime.fromtimestamp(ts,
         tz=timezone.utc).strftime("%H:%M")
 
 def print_table(title, candles, kdj15, kdj1h_map,
-                trade, entry_ts, exit_ts):
+                trade, entry_ts, exit_ts, csv_path):
     print()
     print("=" * 72)
     print(f"  {title}")
@@ -82,6 +83,7 @@ def print_table(title, candles, kdj15, kdj1h_map,
     print("-" * 72)
 
     prev_zone15 = None
+    csv_rows = []
     for i, c in enumerate(candles):
         t = c["t"]
         if t < entry_ts - 30*60:
@@ -92,40 +94,66 @@ def print_table(title, candles, kdj15, kdj1h_map,
         j15 = kdj15[i]["J"]
         j1h = kdj1h_map.get(
             (t // 3600) * 3600, None)
-        z15  = zone(j15)
-        z1h  = zone(j1h) if j1h is not None else "   —     "
-        pnl  = calc_pnl(
+        z15 = zone(j15)
+        z1h = zone(j1h) if j1h is not None else ""
+        pnl = calc_pnl(
             trade["entry"], c["c"],
             trade["dir"]) if t >= entry_ts else None
 
         # Detect zone transitions
-        status = ""
+        csv_status = ""
+        txt_status = ""
         if prev_zone15 and zone(j15) != prev_zone15:
-            status = f"<-- ZONE CROSS {prev_zone15.strip()} -> {zone(j15).strip()}"
+            csv_status = f"ZONE_CROSS:{prev_zone15}->{zone(j15)}"
+            txt_status = f"<-- ZONE CROSS {prev_zone15} -> {zone(j15)}"
         if t == entry_ts:
-            status = "<-- ENTRY"
+            csv_status = "ENTRY"
+            txt_status = "<-- ENTRY"
         if t >= exit_ts and t < exit_ts + 15*60:
-            status = "<-- EXIT"
+            csv_status = "EXIT"
+            txt_status = "<-- EXIT"
         prev_zone15 = zone(j15)
 
         pnl_str = f"${pnl:+.2f}" if pnl is not None else "      "
         j1h_str = f"{j1h:6.1f}" if j1h is not None else "   —  "
+        z1h_pad = z1h.ljust(9) if z1h else "   —     "
+        z15_pad = z15.ljust(9)
 
         print(f"{fmt_ts(t):>6}  "
               f"{c['c']:8.5f}  "
               f"{j15:7.1f}  "
-              f"{z15:>9}  "
+              f"{z15_pad:>9}  "
               f"{j1h_str}  "
-              f"{z1h:>9}  "
+              f"{z1h_pad:>9}  "
               f"{pnl_str:>8}  "
-              f"{status}")
+              f"{txt_status}")
+
+        csv_rows.append({
+            "time_utc":   fmt_ts(t),
+            "price":      f"{c['c']:.5f}",
+            "j15m":       f"{j15:.2f}",
+            "zone15":     z15,
+            "j1h":        f"{j1h:.2f}" if j1h is not None else "",
+            "zone1h":     z1h,
+            "pnl_dollars": f"{pnl:.2f}" if pnl is not None else "",
+            "status":     csv_status,
+        })
 
     print("-" * 72)
     print()
 
+    # Write CSV
+    fieldnames = ["time_utc", "price", "j15m", "zone15",
+                  "j1h", "zone1h", "pnl_dollars", "status"]
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+    return len(csv_rows)
+
 if __name__ == "__main__":
 
-    # ── TRADE DEFINITIONS ───────────────────────
+    # -- TRADE DEFINITIONS --
     WINNER = {
         "dir": "LONG",
         "entry": 0.17500,
@@ -151,20 +179,16 @@ if __name__ == "__main__":
 
     print("Fetching WIF_USDT candles from MEXC...")
 
-    # Fetch 15m candles — winner window
-    # Include 3h lookback for KDJ warmup
     w15 = fetch_klines(
         SYMBOL, "Min15",
         WINNER["entry_ts"] - 3*3600,
         WINNER["exit_ts"] + 3600)
 
-    # Fetch 15m candles — loser window
     l15 = fetch_klines(
         SYMBOL, "Min15",
         LOSER["entry_ts"] - 3*3600,
         LOSER["exit_ts"] + 3600)
 
-    # Fetch 1h candles covering both windows
     h1 = fetch_klines(
         SYMBOL, "Min60",
         WINNER["entry_ts"] - 24*3600,
@@ -174,31 +198,33 @@ if __name__ == "__main__":
     print(f"Fetched {len(l15)} x 15m candles (loser)")
     print(f"Fetched {len(h1)} x 1h candles")
 
-    # Calculate indicators
     kdj_w15 = calc_kdj(w15)
     kdj_l15 = calc_kdj(l15)
     kdj_h1  = calc_kdj(h1)
 
-    # Build 1h J lookup by hour timestamp
     h1_map = {
         c["t"]: kdj_h1[i]["J"]
         for i, c in enumerate(h1)
     }
 
-    # Print tables
-    print_table(
+    n_winner = print_table(
         "ASIA WINNER +$1,200 — J15M JOURNEY",
         w15, kdj_w15, h1_map,
         WINNER,
         WINNER["entry_ts"],
-        WINNER["exit_ts"])
+        WINNER["exit_ts"],
+        "winner_candles.csv")
 
-    print_table(
+    n_loser = print_table(
         "US LOSER -$554 — J15M JOURNEY",
         l15, kdj_l15, h1_map,
         LOSER,
         LOSER["entry_ts"],
-        LOSER["exit_ts"])
+        LOSER["exit_ts"],
+        "loser_candles.csv")
+
+    print(f"Wrote winner_candles.csv — {n_winner} rows")
+    print(f"Wrote loser_candles.csv — {n_loser} rows")
 
     print("Zone definitions:")
     print("  BEARISH   = J < 30")
