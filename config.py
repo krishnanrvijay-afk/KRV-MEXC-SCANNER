@@ -131,3 +131,11 @@ KILL_COOLDOWN_SECONDS: int = 1800
 # Evidence: every re-entry within 30
 # min of a KILL was wrong in 11-trade
 # sample June 27.
+KILL_GRACE_SECONDS: int = 90
+# Grace period before KILL fires.
+# Trade must be open >= this many
+# seconds AND cpnl <= 0 to trigger.
+# Evidence: 5-trade candle analysis
+# June 27. 4/5 correct at 90s.
+# ETH miss saves ~$44 at 90s.
+# 120s creates LTC SL risk.

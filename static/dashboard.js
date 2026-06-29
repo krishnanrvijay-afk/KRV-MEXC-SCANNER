@@ -2783,6 +2783,9 @@ async function cfgFetch() {
       'cfg-kill-cd').value =
       d.kill_cooldown_seconds ?? 1800;
     document.getElementById(
+      'cfg-kill-grace').value =
+      d.kill_grace_seconds ?? 90;
+    document.getElementById(
       'cfg-margin').value =
       d.margin_per_trade ?? 2000;
     document.getElementById(
@@ -2856,6 +2859,9 @@ async function cfgSave() {
     kill_cooldown_seconds: Number(
       document.getElementById(
       'cfg-kill-cd').value),
+    kill_grace_seconds: Number(
+      document.getElementById(
+      'cfg-kill-grace').value),
     margin_per_trade: Number(
       document.getElementById(
       'cfg-margin').value),
