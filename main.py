@@ -1614,6 +1614,13 @@ def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
                 _sb2.table("trade_open_locks").delete().eq("lock_key", _lk).execute()
             except Exception as _unlock_e:
                 print(f"[LOCK CLEANUP FAILED] {_lk}: {_unlock_e}")
+    # Always set cooldown on close regardless of exit reason --
+    # prevents scanner/exit-monitor race condition where a new
+    # alert fires before the KILL call site writes its cooldown.
+    _scanner_mod.set_close_cooldown(
+        sym,
+        trade.get("direction", ""),
+        _scanner_mod.KILL_COOLDOWN_SECONDS)
     _signal_exhaustion_armed.pop(key + "_se_armed", None)
     _se_j1h_extreme.pop(key, None)
     _save_state()
