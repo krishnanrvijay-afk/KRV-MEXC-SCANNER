@@ -983,7 +983,9 @@ def _tg_post(msg: str) -> None:
         except Exception as _e:
             print(f"[TG] send error: {_e}")
 
-    full_msg = "??  MEXC BOUNCE\n" + msg
+    full_msg = (
+        "\U0001F7E0  MEXC BOUNCE\n"
+        + msg)
     def _worker() -> None:
         try:
             _send(full_msg, "HTML")
@@ -1013,13 +1015,13 @@ def send_telegram(alert: dict) -> None:
     margin    = float(alert.get("margin", MARGIN_PER_TRADE) or MARGIN_PER_TRADE)
     score = int(alert.get("score", 4) or 4)
     _strength_map = {
-        4:  "Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ",
-        6:  "Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ",
-        8:  "Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ",
-        10: "Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ",
+        4:  "●○○○",
+        6:  "●●○○",
+        8:  "●●●○",
+        10: "●●●●",
     }
     _strength = _strength_map.get(
-        score, "Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ")
+        score, "●○○○")
 
     tier_map  = {"HIGH_PROB": "\u29BF", "STRONG": "\u25C6"}
     tier_icon = tier_map.get(tier, "\u25CF")
@@ -1649,9 +1651,18 @@ def _do_partial_close_tp1(key: str, trade: dict, exit_price: float):
     # Update trade in-place - keep 30% runner open for Trailblazer
     trade["remaining_size"]   = rem_size
     trade["tp1_hit"]          = True
+    _cpnl_tp1 = (
+        (exit_price - entry)
+        * rem_size
+        if direction == "LONG"
+        else
+        (entry - exit_price)
+        * rem_size)
     _peak_shadow.setdefault(key, {}).update({
         "runner_peak_pnl": 0.0,
         "runner_armed":    True,
+        "peak_pnl_usd":
+            max(0.0, _cpnl_tp1),
     })
     trade["extreme_price"]    = exit_price
     trade["trail_best_price"] = exit_price
