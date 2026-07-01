@@ -58,6 +58,7 @@ _digest_task = None  # type: ignore
 _stale_tg_sent: set[str] = set()  # symbols for which stale-price TG alert was already sent
 _session_sl_counts: dict[str, int]   = {}    # "SYMBOL_DIRECTION_SESSION" -> SL count
 _session_halted:    set[str]         = set() # "SYMBOL_DIRECTION_SESSION" halted for session
+_pending_alerts:    dict[str, dict]  = {}    # f"{symbol}_{direction}" -> alert pending price confirmation
 _large_sl_cooldowns: dict[str, float] = {}   # "SYMBOLDIR" -> expiry ts for 90-min cooldowns
 _peak_shadow: dict = {}   # trade_key -> shadow tracking state (observation only)
 _sentinel_sweep: list = []   # deferred protective exits (PEAK_DECAY_20 / RUNNER_DECAY_10) ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ flushed once per scan cycle
@@ -1241,27 +1242,38 @@ async def _scan_loop():
                 else:
                     if not PAPER_MODE:
                         print(
-                            "[WARNING] LIVE AUTO-ENTRY ACTIVE - "
-                            "LIVE_MANUAL_ENTRY_ONLY is disabled."
+                            "[WARNING] LIVE AUTO-ENTRY ACTIVE"
+                            " — LIVE_MANUAL_ENTRY_ONLY is disabled."
                         )
-                    _margin = alert.get("margin", MARGIN_PER_TRADE)
-                    trade, err = await _do_open_trade(
-                        sym, dir_,
-                        _margin, alert["leverage"],
-                        alert_data=alert,
-                        exchange="MEXC",
-                    )
-                    if trade:
+                    # J1H DIRECTION GATE — confirm J1H moving in right direction
+                    # LONG:  j1h must be rising  (j1h_now > j1h_prev)
+                    # SHORT: j1h must be falling (j1h_now < j1h_prev)
+                    _j1h_now = alert.get("j1h", 50)
+                    _j1h_was = alert.get("j1h_prev", _j1h_now)
+                    _j1h_ok  = (
+                        (dir_ == "LONG"  and _j1h_now > _j1h_was) or
+                        (dir_ == "SHORT" and _j1h_now < _j1h_was))
+                    if not _j1h_ok:
                         print(
-                            f"[AUTO TRADE] {sym} {dir_} opened "
-                            f"tier={alert.get('tier')} lev={alert.get('leverage')}x "
-                            f"entry={trade.get('entry_price')} sl={trade.get('sl_price')} "
-                            f"margin=${_margin:.0f}"
-                        )
-                    elif err:
-                        print(f"[AUTO TRADE] {sym} {dir_} skipped: {err}")
+                            f"[CONFIRM GATE] {sym} {dir_} J1H direction wrong"
+                            f" — j1h={_j1h_now:.1f} prev={_j1h_was:.1f}"
+                            f" — discarded")
+                        continue
+                    # PRICE CONFIRMATION — add to pending, wait for be_confirm_price
+                    _ep = alert.get("entry_price", 0) or 0
+                    _be_confirm = round(
+                        _ep * 1.001 if dir_ == "LONG" else _ep * 0.999, 6)
+                    _pend_key = f"{sym}_{dir_}"
+                    alert["pending_since"]    = int(time.time())
+                    alert["be_confirm_price"] = _be_confirm
+                    _pending_alerts[_pend_key] = alert
+                    print(
+                        f"[PENDING] {sym} {dir_} awaiting price confirmation"
+                        f" at {_be_confirm:.5f}"
+                        f" (entry={_ep:.5f} j1h={_j1h_now:.1f})")
         except Exception as e:
             print(f"[SCAN LOOP] error: {e}")
+        await _process_pending_alerts()
         await asyncio.sleep(SCAN_INTERVAL_SECONDS)
 
 
@@ -2358,6 +2370,77 @@ async def _supervised(coro_fn, name: str):
         else:
             print(f"[WATCHDOG] {name} task exited cleanly (unexpected) — respawning in 2s")
         await asyncio.sleep(2)
+
+
+async def _process_pending_alerts():
+    """Called each scan cycle. Checks pending alerts for expiry or price
+    confirmation. Expiry thresholds reuse data-derived staleness values:
+    age>480s, J15M drift>30pts, price drift>1.5%.
+    Price confirmation target: entry*1.001 LONG / entry*0.999 SHORT.
+    """
+    if not _pending_alerts:
+        return
+    _to_remove = []
+    for _pk, _alert in list(_pending_alerts.items()):
+        _sym   = _alert["symbol"]
+        _dir   = _alert["direction"]
+        _ep    = _alert.get("entry_price", 0) or 0
+        _be    = _alert.get("be_confirm_price", 0)
+        _since = _alert.get("pending_since", int(time.time()))
+        _age   = int(time.time()) - _since
+        _cur   = app_state.prices.get(_sym, 0) or 0
+        _alert_j15m = _alert.get("j15m", 50)
+
+        _cur_j15m = _alert_j15m
+        for _ps in app_state.pair_states:
+            if _ps.get("symbol") == _sym:
+                _cur_j15m = _ps.get("j15m", _alert_j15m)
+                break
+
+        _j15m_drift = abs(_cur_j15m - _alert_j15m)
+        _p_drift    = abs(_cur - _ep) / _ep * 100 if _ep else 0
+
+        # Expiry — data-derived thresholds (mirrors /api/state staleness)
+        _expired = _age > 480 or _j15m_drift > 30 or _p_drift > 1.5
+        if _expired:
+            reason = (
+                f"age={_age}s"                  if _age > 480        else
+                f"j15m_drift={_j15m_drift:.1f}" if _j15m_drift > 30  else
+                f"p_drift={_p_drift:.2f}%"
+            )
+            print(f"[PENDING EXPIRED] {_sym} {_dir} reason={reason}")
+            _to_remove.append(_pk)
+            continue
+
+        if _cur <= 0 or not _be:
+            continue
+
+        # Price confirmation check
+        _confirmed = (
+            (_dir == "LONG"  and _cur >= _be) or
+            (_dir == "SHORT" and _cur <= _be))
+        if _confirmed:
+            print(
+                f"[CONFIRMED] {_sym} {_dir} price={_cur:.5f}"
+                f" be={_be:.5f} — opening trade")
+            _margin = _alert.get("margin", MARGIN_PER_TRADE)
+            trade, err = await _do_open_trade(
+                _sym, _dir,
+                _margin, _alert["leverage"],
+                alert_data=_alert,
+                exchange="MEXC",
+            )
+            if trade:
+                print(
+                    f"[CONFIRMED TRADE] {_sym} {_dir}"
+                    f" entry={trade.get('entry_price')}"
+                    f" pending_age={_age}s")
+            elif err:
+                print(f"[CONFIRMED] {_sym} {_dir} open failed: {err}")
+            _to_remove.append(_pk)
+
+    for _pk in _to_remove:
+        _pending_alerts.pop(_pk, None)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
