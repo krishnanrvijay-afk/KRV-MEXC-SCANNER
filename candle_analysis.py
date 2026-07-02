@@ -40,22 +40,21 @@ def pnl(entry, price, direction, margin=5000, lev=5):
         return round((price - entry) * sz, 2)
     return round((entry - price) * sz, 2)
 
-def analyze(label, symbol, direction, open_ts,
-            close_ts, entry_px, be_confirm_px, duration_s):
+def analyze(label, symbol, direction, open_ts, entry_px, duration_s):
     candles = fetch(
         symbol, "Min1",
-        open_ts - 120,
-        open_ts + 300)
+        open_ts - 60,
+        open_ts + 180)
 
     trade_c = [c for c in candles
         if c["t"] >= open_ts - 30
-        and c["t"] <= open_ts + 180]
+        and c["t"] <= open_ts + 120]
 
-    print(f"\n{'='*64}")
+    print(f"\n{'='*68}")
     print(f"  {label}")
-    print(f"  {symbol} {direction}  dur={duration_s}s")
-    print(f"  entry={entry_px}  be_confirm={be_confirm_px}")
-    print(f"{'='*64}")
+    print(f"  {symbol} {direction}  dur={duration_s}s  entry={entry_px}")
+    print(f"  open={fmt(open_ts)} UTC")
+    print(f"{'='*68}")
     print(f"  {'TIME':>8}  "
           f"{'O':>10}  "
           f"{'H':>10}  "
@@ -67,29 +66,21 @@ def analyze(label, symbol, direction, open_ts,
     print(f"  {'-'*76}")
 
     if not trade_c:
-        print(f"  no candles — "
-              f"window {fmt(open_ts-120)}"
-              f" to {fmt(open_ts+300)}")
+        print(f"  no candles in window")
         return
 
     for c in trade_c:
         p_hi = pnl(entry_px, c["h"], direction)
         p_lo = pnl(entry_px, c["l"], direction)
-
         note = ""
         if abs(c["t"] - open_ts) < 90:
             note = "ENTRY WINDOW"
         if direction == "LONG":
             if c["l"] <= entry_px:
-                note += " CR_FIRES"
-            if c["l"] <= be_confirm_px:
-                note += " BELOW_CONFIRM"
+                note += " \u26a1CR"
         else:
             if c["h"] >= entry_px:
-                note += " CR_FIRES"
-            if c["h"] >= be_confirm_px:
-                note += " ABOVE_CONFIRM"
-
+                note += " \u26a1CR"
         print(f"  {fmt(c['t']):>8}"
               f"  {c['o']:10.5f}"
               f"  {c['h']:10.5f}"
@@ -99,63 +90,71 @@ def analyze(label, symbol, direction, open_ts,
               f"  {p_lo:8.2f}"
               f"  {note}")
 
-def ts(y, mo, d, h, mi, s=0):
-    return int(datetime(
-        y, mo, d, h, mi, s,
+def ts(iso):
+    return int(datetime.fromisoformat(
+        iso.replace('+00', '')
+    ).replace(
         tzinfo=timezone.utc
     ).timestamp())
 
 TRADES = [
-    # @107 SHORT 18s -$19
-    # 09:31 AM ET = 13:31 UTC
     ("@107 SHORT 18s -$19",
      "HYPE_USDT", "SHORT",
-     ts(2026,7,2,13,31,0),
-     ts(2026,7,2,13,31,18),
-     65.4705, 65.405029, 18),
+     ts("2026-07-02 13:30:48+00"),
+     65.391, 18),
 
-    # SOL LONG 4s -$9
-    # 09:33 AM ET = 13:33 UTC
     ("SOL LONG 4s -$9",
      "SOL_USDT", "LONG",
-     ts(2026,7,2,13,33,0),
-     ts(2026,7,2,13,33,4),
-     81.2895, 81.370790, 4),
+     ts("2026-07-02 13:33:51+00"),
+     81.4425, 4),
 
-    # @107 SHORT 4s -$4
-    # 10:20 AM ET = 14:20 UTC
-    ("@107 SHORT 4s -$4",
-     "HYPE_USDT", "SHORT",
-     ts(2026,7,2,14,20,0),
-     ts(2026,7,2,14,20,4),
-     66.065, 65.998935, 4),
-
-    # XRP_USDT SHORT 7s $0
-    # 09:57 AM ET = 13:57 UTC
     ("XRP_USDT SHORT 7s $0",
      "XRP_USDT", "SHORT",
-     ts(2026,7,2,13,57,0),
-     ts(2026,7,2,13,57,7),
-     1.1042, 1.103096, 7),
+     ts("2026-07-02 13:57:34+00"),
+     1.1027, 7),
 
-    # ETH SHORT 6s -$15
-    # 10:33 AM ET = 14:33 UTC
+    ("@107 SHORT 4s -$4",
+     "HYPE_USDT", "SHORT",
+     ts("2026-07-02 14:20:07+00"),
+     65.933, 4),
+
+    ("LINK_USDT SHORT 5s $0",
+     "LINK_USDT", "SHORT",
+     ts("2026-07-02 14:28:16+00"),
+     7.849, 5),
+
     ("ETH SHORT 6s -$15",
      "ETH_USDT", "SHORT",
-     ts(2026,7,2,14,33,0),
-     ts(2026,7,2,14,33,6),
-     1702.25, 1700.5478, 6),
+     ts("2026-07-02 14:33:17+00"),
+     1701.35, 6),
 
-    # ADA LONG 6s -$1
-    # 11:21 AM ET = 15:21 UTC
     ("ADA LONG 6s -$1",
      "ADA_USDT", "LONG",
-     ts(2026,7,2,15,21,0),
-     ts(2026,7,2,15,21,6),
-     0.159365, 0.159524, 6),
+     ts("2026-07-02 15:21:34+00"),
+     0.159685, 6),
+
+    ("XRP_USDT LONG 4s -$7",
+     "XRP_USDT", "LONG",
+     ts("2026-07-02 15:22:01+00"),
+     1.0911, 4),
+
+    ("DOGE_USDT LONG 7s $0",
+     "DOGE_USDT", "LONG",
+     ts("2026-07-02 15:28:38+00"),
+     0.07452, 7),
+
+    ("WIF_USDT LONG 0s -$29",
+     "WIF_USDT", "LONG",
+     ts("2026-07-02 15:35:46+00"),
+     0.1727, 0),
+
+    ("HYPE_USDT LONG 1s -$8",
+     "HYPE_USDT", "LONG",
+     ts("2026-07-02 15:35:46+00"),
+     65.667, 1),
 ]
 
-print("US session CONFIRM_REVERSAL forensic — entry_price fix")
+print("CONFIRM_REVERSAL forensic — exact DB timestamps")
 print(f"{len(TRADES)} trades\n")
 
 for t in TRADES:
