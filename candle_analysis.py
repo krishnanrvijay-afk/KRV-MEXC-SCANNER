@@ -67,7 +67,9 @@ def analyze(label, symbol, direction, open_ts,
     print(f"  {'-'*76}")
 
     if not trade_c:
-        print("  no candles in window")
+        print(f"  no candles — "
+              f"window {fmt(open_ts-120)}"
+              f" to {fmt(open_ts+300)}")
         return
 
     for c in trade_c:
@@ -105,51 +107,51 @@ def ts(y, mo, d, h, mi, s=0):
 
 TRADES = [
     # @107 SHORT 18s -$19
-    # close 13:31 ET = 17:31 UTC
+    # 09:31 AM ET = 13:31 UTC
     ("@107 SHORT 18s -$19",
      "HYPE_USDT", "SHORT",
-     ts(2026,7,2,17,13,0),
-     ts(2026,7,2,17,13,18),
+     ts(2026,7,2,13,31,0),
+     ts(2026,7,2,13,31,18),
      65.4705, 65.405029, 18),
 
     # SOL LONG 4s -$9
-    # close 13:33 ET = 17:33 UTC
+    # 09:33 AM ET = 13:33 UTC
     ("SOL LONG 4s -$9",
      "SOL_USDT", "LONG",
-     ts(2026,7,2,17,29,0),
-     ts(2026,7,2,17,29,4),
+     ts(2026,7,2,13,33,0),
+     ts(2026,7,2,13,33,4),
      81.2895, 81.370790, 4),
 
     # @107 SHORT 4s -$4
-    # close 14:20 ET = 18:20 UTC
+    # 10:20 AM ET = 14:20 UTC
     ("@107 SHORT 4s -$4",
      "HYPE_USDT", "SHORT",
-     ts(2026,7,2,18,16,0),
-     ts(2026,7,2,18,16,4),
+     ts(2026,7,2,14,20,0),
+     ts(2026,7,2,14,20,4),
      66.065, 65.998935, 4),
 
     # XRP_USDT SHORT 7s $0
-    # close 13:57 ET = 17:57 UTC
+    # 09:57 AM ET = 13:57 UTC
     ("XRP_USDT SHORT 7s $0",
      "XRP_USDT", "SHORT",
-     ts(2026,7,2,17,53,0),
-     ts(2026,7,2,17,53,7),
+     ts(2026,7,2,13,57,0),
+     ts(2026,7,2,13,57,7),
      1.1042, 1.103096, 7),
 
     # ETH SHORT 6s -$15
-    # close 14:33 ET = 18:33 UTC
+    # 10:33 AM ET = 14:33 UTC
     ("ETH SHORT 6s -$15",
      "ETH_USDT", "SHORT",
-     ts(2026,7,2,18,27,0),
-     ts(2026,7,2,18,27,6),
+     ts(2026,7,2,14,33,0),
+     ts(2026,7,2,14,33,6),
      1702.25, 1700.5478, 6),
 
     # ADA LONG 6s -$1
-    # close 15:21 ET = 19:21 UTC
+    # 11:21 AM ET = 15:21 UTC
     ("ADA LONG 6s -$1",
      "ADA_USDT", "LONG",
-     ts(2026,7,2,19,15,0),
-     ts(2026,7,2,19,15,6),
+     ts(2026,7,2,15,21,0),
+     ts(2026,7,2,15,21,6),
      0.159365, 0.159524, 6),
 ]
 
