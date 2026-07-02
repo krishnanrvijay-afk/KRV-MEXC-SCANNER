@@ -25,7 +25,6 @@ def fetch(symbol, interval,
             len(raw["time"])):
         out.append({
           "t": int(raw["time"][i]),
-          "o": float(raw["open"][i]),
           "h": float(raw["high"][i]),
           "l": float(raw["low"][i]),
           "c": float(raw["close"][i])
@@ -64,128 +63,208 @@ def pnl(entry, price, direction,
     return round(
         (entry-price)*sz, 2)
 
-entry_ts = int(datetime(
-    2026,7,2,0,9,29,
-    tzinfo=timezone.utc
-).timestamp())
-close_ts = int(datetime(
-    2026,7,2,0,20,18,
-    tzinfo=timezone.utc
-).timestamp())
-entry_px = 1.814
-be_confirm = 1.812811
-direction = "LONG"
+def get_c5m_low(c5m_candles, t):
+    # find the last CLOSED 5m
+    # candle before timestamp t
+    # closed = candle whose end
+    # time <= t
+    # candle end = c["t"] + 300
+    prev = None
+    for c in c5m_candles:
+        if c["t"] + 300 <= t:
+            prev = c
+        else:
+            break
+    return prev["l"] if prev else None
 
-# Min1 price candles
-c1 = fetch("NEAR_USDT", "Min1",
-    entry_ts-300, close_ts+120)
-
-# Min15 for J15M KDJ
-c15 = fetch("NEAR_USDT", "Min15",
-    entry_ts-7200, close_ts+900)
-j15_vals = calc_kdj(c15)
-
-# Build J15M lookup by 15m bucket
-j15_map = {}
-for i, c in enumerate(c15):
-    j15_map[c["t"]] = j15_vals[i]
-
-def get_j15m(t):
-    # find the Min15 candle that
-    # contains timestamp t
-    bucket = (t // 900) * 900
-    if bucket in j15_map:
-        return j15_map[bucket]
-    # try adjacent
-    for d in [-900, 900, -1800]:
-        if bucket+d in j15_map:
-            return j15_map[bucket+d]
+def get_j5m(c5m_candles,
+            j5m_vals, t):
+    # J5M value of the 5m candle
+    # containing timestamp t
+    for i, c in enumerate(
+            c5m_candles):
+        if (c["t"] <= t <
+                c["t"] + 300):
+            return j5m_vals[i]
     return None
 
-trade_c = [c for c in c1
-    if c["t"] >= entry_ts-60
-    and c["t"] <= close_ts+60]
+def analyze(label, symbol,
+            direction, open_ts,
+            close_ts, entry_px,
+            be_confirm_px,
+            duration_s):
+    warmup = 3600
+    c1 = fetch(symbol, "Min1",
+        open_ts - 60,
+        close_ts + 120)
+    c5 = fetch(symbol, "Min5",
+        open_ts - warmup,
+        close_ts + 300)
+    j5m_vals = calc_kdj(c5)
 
-print("NEAR_USDT LONG — J15M forensic")
-print(f"Entry: {entry_px}  "
-      f"BE_confirm: {be_confirm}")
-print(f"{'TIME':>8}  {'PnL_hi':>8}"
-      f"  {'PnL_c':>8}  "
-      f"{'J15M':>7}  "
-      f"{'PEAK_J15M':>10}  "
-      f"{'DECAY':>7}  NOTE")
-print("-"*72)
+    trade_c = [c for c in c1
+        if c["t"] >= open_ts - 30
+        and c["t"] <= close_ts + 60]
 
-peak_pnl = 0
-peak_j15m = None
-j15m_se_fire_ts = None
-j15m_se_fire_pnl = None
-ever_profitable = False
+    peak_pnl = 0
+    peak_ts = None
+    ever_profitable = False
+    trail_exit_ts = None
+    trail_exit_pnl = None
 
-for c in trade_c:
-    p_hi = pnl(entry_px, c["h"],
-               direction)
-    p_c  = pnl(entry_px, c["c"],
-               direction)
-    j15m = get_j15m(c["t"])
+    print(f"\n{'='*72}")
+    print(f"  {label}")
+    print(f"  dur={duration_s}s  "
+          f"entry={entry_px}")
+    print(f"{'='*72}")
+    print(f"  {'TIME':>8}  "
+          f"{'PnL_hi':>8}  "
+          f"{'PnL_c':>8}  "
+          f"{'J5M':>7}  "
+          f"{'C5M_LOW':>9}  "
+          f"NOTE")
+    print(f"  {'-'*68}")
 
-    if p_hi > 0:
-        ever_profitable = True
-    if p_hi > peak_pnl:
-        peak_pnl = p_hi
+    for c in trade_c:
+        p_hi = pnl(entry_px,
+            c["h"], direction)
+        p_lo = pnl(entry_px,
+            c["l"], direction)
+        p_c = pnl(entry_px,
+            c["c"], direction)
 
-    # track J15M peak
-    if (ever_profitable and
-            j15m is not None):
-        if (peak_j15m is None or
-                j15m > peak_j15m):
-            peak_j15m = j15m
+        if p_hi > 0:
+            ever_profitable = True
+        if p_hi > peak_pnl:
+            peak_pnl = p_hi
+            peak_ts = c["t"]
 
-    # SE fire condition —
-    # J15M decayed 10pts from peak
-    decay = 0
-    if peak_j15m is not None and j15m:
-        decay = peak_j15m - j15m
+        c5m_low = get_c5m_low(
+            c5, c["t"])
+        j5m = get_j5m(
+            c5, j5m_vals, c["t"])
 
-    se_fires = (
-        ever_profitable and
-        decay >= 10 and
-        j15m_se_fire_ts is None)
-    if se_fires:
-        j15m_se_fire_ts = c["t"]
-        j15m_se_fire_pnl = p_c
+        # trail break —
+        # price breaks prev 5m low
+        # while ever profitable
+        trail_broke = (
+            ever_profitable and
+            c5m_low is not None and
+            direction == "LONG" and
+            c["l"] < c5m_low and
+            trail_exit_ts is None)
 
-    note = ""
-    if c["t"] < entry_ts:
-        note = "PRE"
-    elif c["t"] <= entry_ts+60:
-        note = "ENTRY"
-    if c["l"] <= be_confirm:
-        note += " ⚡CR"
-    if se_fires:
-        note += " ★J15M_SE FIRES"
+        if trail_broke:
+            trail_exit_ts = c["t"]
+            trail_exit_pnl = p_lo
 
-    print(f"{fmt(c['t']):>8}"
-          f"  {p_hi:8.2f}"
-          f"  {p_c:8.2f}"
-          f"  {j15m or 0:7.1f}"
-          f"  {peak_j15m or 0:10.1f}"
-          f"  {decay:7.1f}"
-          f"  {note}")
+        note = ""
+        if abs(c["t"] -
+                open_ts) < 90:
+            note = "ENTRY"
+        if c["l"] <= be_confirm_px:
+            note += " ⚡CR"
+        if trail_broke:
+            note += " ★TRAIL"
 
-print(f"\nPeak PnL:    +${peak_pnl:.2f}"
-      f" at 00:13")
-if j15m_se_fire_ts:
-    print(
-        f"J15M SE exit: {fmt(j15m_se_fire_ts)}"
-        f" PnL={j15m_se_fire_pnl:+.2f}")
-    print(
-        f"CR exit:      00:20:00"
-        f" PnL≈-$27.56")
-    print(
-        f"SE vs CR:     "
-        f"${j15m_se_fire_pnl+27.56:.2f}"
-        f" better with J15M SE")
-else:
-    print("J15M SE never fired"
-          " (decay never >= 10)")
+        print(
+            f"  {fmt(c['t']):>8}"
+            f"  {p_hi:8.2f}"
+            f"  {p_c:8.2f}"
+            f"  {j5m or 0:7.1f}"
+            f"  {c5m_low or 0:9.5f}"
+            f"  {note}")
+
+    print(f"\n  Peak: +${peak_pnl:.2f}"
+          f" at {fmt(peak_ts)}"
+          if peak_ts else
+          "\n  No real peak")
+    if trail_exit_ts:
+        actual = pnl(entry_px,
+            be_confirm_px,
+            direction)
+        saved = (trail_exit_pnl
+                 - actual)
+        print(
+            f"  TRAIL EXIT:"
+            f" ~${trail_exit_pnl:.2f}"
+            f" at {fmt(trail_exit_ts)}")
+        print(
+            f"  CR EXIT:   "
+            f" ~${actual:.2f}")
+        print(
+            f"  SAVED:      "
+            f"${saved:.2f}")
+    else:
+        print(
+            "  Trail never broke"
+            " in candle data")
+
+def ts(y,mo,d,h,mi,s=0):
+    return int(datetime(
+        y,mo,d,h,mi,s,
+        tzinfo=timezone.utc
+    ).timestamp())
+
+TRADES = [
+    ("NEAR_USDT LONG 649s -$27"
+     " mfe=0.19R",
+     "NEAR_USDT","LONG",
+     ts(2026,7,2,0,9,29),
+     ts(2026,7,2,0,20,18),
+     1.814, 1.812811, 649),
+
+    ("NEAR_USDT LONG 153s -$15"
+     " mfe=0.08R",
+     "NEAR_USDT","LONG",
+     ts(2026,7,2,0,48,20),
+     ts(2026,7,2,0,50,53),
+     1.81605, 1.815614, 153),
+
+    ("HYPE_USDT LONG 260s -$28"
+     " mfe=0.06R",
+     "HYPE_USDT","LONG",
+     ts(2026,7,2,1,0,28),
+     ts(2026,7,2,1,4,48),
+     62.3395, 62.285723, 260),
+
+    ("BTC_USDT LONG 358s -$24"
+     " mfe=0.07R",
+     "BTC_USDT","LONG",
+     ts(2026,7,2,0,55,22),
+     ts(2026,7,2,1,1,20),
+     59705.6, 59694.635, 358),
+
+    ("HYPE_USDT LONG 84s -$16"
+     " mfe=0.01R",
+     "HYPE_USDT","LONG",
+     ts(2026,7,2,0,22,28),
+     ts(2026,7,2,0,23,52),
+     62.5075, 62.486924, 84),
+
+    ("DOGE_USDT LONG 110s -$7"
+     " mfe=0.11R",
+     "DOGE_USDT","LONG",
+     ts(2026,7,1,20,49,15),
+     ts(2026,7,1,20,51,5),
+     0.07279, 0.072763, 110),
+
+    ("HYPE_USDT LONG 43s -$22"
+     " mfe=0.09R",
+     "HYPE_USDT","LONG",
+     ts(2026,7,1,20,50,5),
+     ts(2026,7,1,20,50,48),
+     62.3395, 62.325763, 43),
+]
+
+print("Non-zero MFE CONFIRM_REVERSAL"
+      " — J5M + C5M_LOW forensic")
+print(f"{len(TRADES)} trades\n")
+
+for t in TRADES:
+    try:
+        analyze(*t)
+    except Exception as e:
+        print(f"\n{t[0]}: ERROR {e}")
+
+print("\nDone.")
