@@ -2261,8 +2261,7 @@ async def _exit_monitor_loop():
                     trade.get("margin", 2000)
                     * trade.get("leverage", 5))
                 _sentinel_min = _notional * _sentinel_pct
-                if is_short and \
-                    _sh["be_armed"] and \
+                if _sh["be_armed"] and \
                           _sh["peak_pnl_usd"] >= _sentinel_min:
                       _decay_threshold = 0.70 \
                           if sym in ("@107",) else 0.80
