@@ -2120,6 +2120,8 @@ async def _exit_monitor_loop():
                         "d20_at": None, "d20_pnl": None, "d20_phase": None,
                         "d30_at": None, "d30_pnl": None, "d30_phase": None,
                         "d40_at": None, "d40_pnl": None, "d40_phase": None,
+                        "last_peak_candle_ts": 0,
+                        "peak_set_at_ts": 0,
                     })
                     _sz   = trade.get("remaining_size", trade.get("size", 0)) or 0
                     _ent  = trade.get("entry_price", 0) or 0
@@ -2131,9 +2133,13 @@ async def _exit_monitor_loop():
                                    else False)
                     if _be_crossed:
                         _sh["be_armed"] = True
-                    if _sh["be_armed"] and _cpnl > _sh["peak_pnl_usd"]:
+                    _now_candle_ts = (int(time.time()) // 60) * 60
+                    if (_sh["be_armed"] and _cpnl > _sh["peak_pnl_usd"]
+                            and _now_candle_ts > _sh["last_peak_candle_ts"]):
                         _sh["peak_pnl_usd"]    = _cpnl
                         _sh["peak_reached_at"] = datetime.now(timezone.utc).isoformat()
+                        _sh["last_peak_candle_ts"] = _now_candle_ts
+                        _sh["peak_set_at_ts"] = int(time.time())
                         _sh["d20_at"] = _sh["d20_pnl"] = _sh["d20_phase"] = None
                         _sh["d30_at"] = _sh["d30_pnl"] = _sh["d30_phase"] = None
                         _sh["d40_at"] = _sh["d40_pnl"] = _sh["d40_phase"] = None
@@ -2375,19 +2381,25 @@ async def _exit_monitor_loop():
                       _decay_threshold = 0.70 \
                           if sym in ("@107",) else 0.80
 
-                      # Ã¢ÂÂÃ¢ÂÂ Before TP1: PEAK_DECAY_20 on both directions Ã¢ÂÂÃ¢ÂÂ
-                      if not tp1_hit:
-                          if _cpnl < _sh["peak_pnl_usd"] \
-                                  * _decay_threshold:
-                              reason = "PEAK_DECAY_20"
-                              print(f"[PEAK_DECAY_20] "
-                                    f"{sym} {direction} "
-                                    f"peak={_sh['peak_pnl_usd']:.2f} "
-                                    f"cpnl={_cpnl:.2f} "
-                                    f"-- pre-TP1 decay")
-                              _do_close_trade(key, trade,
-                                  current, reason)
-                              continue
+                      _peak_age = (
+                          int(time.time())
+                          - _sh.get("peak_set_at_ts", 0))
+                      if _peak_age < 60:
+                          pass  # skip decay check this cycle
+                      else:
+                          # Ã¢ÂÂÃ¢ÂÂ Before TP1: PEAK_DECAY_20 on both directions Ã¢ÂÂÃ¢ÂÂ
+                          if not tp1_hit:
+                              if _cpnl < _sh["peak_pnl_usd"] \
+                                      * _decay_threshold:
+                                  reason = "PEAK_DECAY_20"
+                                  print(f"[PEAK_DECAY_20] "
+                                        f"{sym} {direction} "
+                                        f"peak={_sh['peak_pnl_usd']:.2f} "
+                                        f"cpnl={_cpnl:.2f} "
+                                        f"-- pre-TP1 decay")
+                                  _do_close_trade(key, trade,
+                                      current, reason)
+                                  continue
 
                       # Ã¢ÂÂÃ¢ÂÂ After TP1: PEAK_DECAY_10 on runner both directions Ã¢ÂÂÃ¢ÂÂ
                       if tp1_hit and is_short:
