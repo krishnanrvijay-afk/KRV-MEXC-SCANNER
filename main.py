@@ -810,14 +810,38 @@ async def _do_open_trade(
     global circuit_breaker_active, trading_halted_today
 
     if app_state.margin_deployed + margin_usdc > MARGIN_HARD_CAP:
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_CAP",
+                exchange,
+            ))
         return None, "cap_reached"
     if circuit_breaker_active:
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_CIRCUIT_BREAKER",
+                exchange,
+            ))
         return None, "circuit_breaker"
     if trading_halted_today:
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_DAILY_LIMIT",
+                exchange,
+            ))
         return None, "daily_limit"
 
     key = app_state.trade_key(symbol, direction)
     if key in app_state.open_trades:
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_ALREADY_OPEN",
+                exchange,
+            ))
         return None, "already_open"
 
     lock_key = f"MEXC:{symbol}:{direction}:{BOT_INSTANCE_ID}"
@@ -892,11 +916,23 @@ async def _do_open_trade(
         symbol, direction, margin_usdc, leverage, sl_price=sl_price
     )
     if result.get("status") != "ok":
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_OPEN_FAILED",
+                exchange,
+            ))
         return None, result.get("msg", "open_failed")
 
     entry = result["entry_price"]
     if not entry or entry == 0.0:
         print(f"[TRADE BLOCKED] {symbol} {direction} null price rejected")
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_NULL_PRICE",
+                exchange,
+            ))
         return None, "null_price"
 
     if not sl_price or sl_price <= 0:
@@ -911,6 +947,12 @@ async def _do_open_trade(
                    .execute()
             except Exception:
                 pass
+        asyncio.create_task(
+            _log_alert_outcome(
+                {"symbol": symbol, "direction": direction},
+                "BLOCKED_INVALID_SL",
+                exchange,
+            ))
         return None, "invalid_sl"
 
     size = result.get("size", (margin_usdc * leverage) / entry if entry else 0)
@@ -977,6 +1019,12 @@ async def _do_open_trade(
     if PAPER_MODE and alert_data:
         asyncio.create_task(_save_paper_trade(trade, alert_data))
     asyncio.create_task(_open_trade_log_row(trade))
+    asyncio.create_task(
+        _log_alert_outcome(
+            trade,
+            "TRADE_OPENED",
+            exchange,
+        ))
 
     for a in app_state.alerts:
         if a["symbol"] == symbol and a["direction"] == direction:
@@ -2638,7 +2686,7 @@ async def _process_pending_alerts():
             asyncio.create_task(
                 _log_alert_outcome(
                     _alert,
-                    "CONFIRMED",
+                    "PRICE_GATE_PASSED",
                     "MEXC",
                     pending_duration_seconds
                         =_age,
