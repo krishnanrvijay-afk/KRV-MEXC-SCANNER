@@ -1315,24 +1315,6 @@ async def _scan_loop():
                     # -> _do_open_trade(), all in the same scan cycle as the signal.
                     _ep = alert.get("entry_price", 0) or 0
 
-                    # Cooldown check — pair-wide 900s cooldown (set by
-                    # _set_pair_cooldown_900() on trade close) and per-symbol+
-                    # direction cooldown (set by set_close_cooldown() on signal
-                    # fire, above) are the SAME _cooldowns dict/check — there is
-                    # only one gate here, not two independent ones.
-                    _cd_remaining = get_cooldown_remaining(sym, dir_)
-                    if _cd_remaining > 0:
-                        print(
-                            f"[BLOCKED_COOLDOWN] {sym} {dir_} "
-                            f"{_cd_remaining}s remaining")
-                        asyncio.create_task(
-                            _log_alert_outcome(
-                                alert,
-                                "BLOCKED_COOLDOWN",
-                                "MEXC",
-                            ))
-                        continue
-
                     # Already-open duplicate guard — skip silently, no log.
                     _open_key = app_state.trade_key(sym, dir_)
                     if _open_key in app_state.open_trades:
@@ -1688,11 +1670,6 @@ async def _write_sign_shadow_rows(key: str, trade: dict, reason: str,
         print("[SIGN SHADOW] write error: " + str(_ss_e))
 
 
-def _set_pair_cooldown_900(symbol: str) -> None:
-    # Per-pair cooldown: any trade close blocks BOTH directions on this
-    # pair for 900s (15 min), not just the direction that closed.
-    set_close_cooldown(symbol, "LONG", 900)
-    set_close_cooldown(symbol, "SHORT", 900)
 
 
 def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
@@ -1778,10 +1755,6 @@ def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
                 _sb2.table("trade_open_locks").delete().eq("lock_key", _lk).execute()
             except Exception as _unlock_e:
                 print(f"[LOCK CLEANUP FAILED] {_lk}: {_unlock_e}")
-    # Always set cooldown on close regardless of exit reason --
-    # prevents scanner/exit-monitor race condition where a new
-    # alert fires before the KILL call site writes its cooldown.
-    _set_pair_cooldown_900(sym)
     _signal_exhaustion_armed.pop(key + "_se_armed", None)
     _se_j1h_extreme.pop(key, None)
     _save_state()
@@ -1869,7 +1842,6 @@ def _do_trailblazer_close(key: str, trade: dict, exit_price: float,
     if key in app_state.open_trades:
         del app_state.open_trades[key]
     _retire_alert(sym, direction)
-    _set_pair_cooldown_900(sym)
 
     print(f"[TRAILBLAZER] {sym} {direction} - runner closed at {exit_price}, "
           f"best price was {trail_best}, trail stop triggered at {trail_stop}")
@@ -2138,7 +2110,6 @@ async def _exit_monitor_loop():
                           f" elapsed={_elapsed:.0f}s")
                     _do_close_trade(
                         key, trade, current, "KILL")
-                    _set_pair_cooldown_900(sym)
                     continue
                 # -- ANCHOR time exit: 90 minutes max duration
                 _anchor_pairs = {
@@ -2159,7 +2130,6 @@ async def _exit_monitor_loop():
                                   f"90min exceeded, exiting")
                             _do_close_trade(key, trade,
                                             current, "ANCHOR_TIME_EXIT")
-                            _set_pair_cooldown_900(sym)
                             continue
 
                 # -- Peak PnL protection shadow (observation only, no exit logic) ----
@@ -3103,7 +3073,6 @@ async def close_trade(req: CloseTradeRequest):
     closed = {**trade, "close_price": close_price, "final_pnl": round(pnl, 2)}
     del app_state.open_trades[key]
     _retire_alert(req.symbol, req.direction)
-    _set_pair_cooldown_900(req.symbol)
 
     _lk = trade.get("_lock_key")
     if _lk:
