@@ -1971,57 +1971,6 @@ async def _exit_monitor_loop():
                 _cut_usd    = ADVERSE_CUT_USD.get(sym, ADVERSE_CUT_DEFAULT_USD)
                 _cpnl       = ((_entry - current) * _size if is_short
                                else (current - _entry) * _size)
-                if trade.get("tier") != "HIGH_PROB":
-                    # HIGH_PROB tier trades skip CONFIRM_REVERSAL
-                    # entirely -- they already passed more gates,
-                    # so the stronger exit stack (KILL, PEAK_DECAY,
-                    # SE) handles them instead.
-                    # KILL ÃÂ¢ÃÂÃÂ 60s grace then zero tolerance
-                    # CONFIRMATION REVERSAL EXIT
-                    # If trade entered via the
-                    # confirmation system, exit the
-                    # moment price breaks back through
-                    # the confirmation level. The
-                    # confirmation level is where price
-                    # proved the move was real -- if
-                    # price returns there, the move
-                    # has failed. No arming required.
-                    # No percentage threshold. Pure
-                    # price level exit.
-                    # Only fires for confirmed entries
-                    # (be_confirm_price is not None).
-                    _entry_px_cr = trade.get(
-                        "entry_price")
-                    _confirm_px = trade.get(
-                        "be_confirm_price")
-                    _cr_age = (
-                        int(time.time())
-                        - trade.get(
-                            "opened_at",
-                            int(time.time())))
-                    if (is_short and
-                            _confirm_px and
-                            _entry_px_cr and
-                            _cr_age >= 300):
-                        _confirm_broken = (
-                            (not is_short and
-                             current <= _entry_px_cr)
-                            or
-                            (is_short and
-                             current >= _entry_px_cr))
-                        if _confirm_broken:
-                            print(
-                                f"[CONFIRM_REVERSAL]"
-                                f" {sym} {direction}"
-                                f" price={current}"
-                                f" entry={_entry_px_cr}"
-                                f" age={_cr_age}s"
-                                f" — exiting")
-                            _do_close_trade(
-                                key, trade,
-                                current,
-                                "CONFIRM_REVERSAL")
-                            continue
 
                 # -- SL_PROXIMITY_EXIT: all tiers, all pairs, both directions.
                 # Exits once price has moved 80% of the way from entry to
@@ -2061,8 +2010,7 @@ async def _exit_monitor_loop():
                         continue
 
                 # -- HP_TIME_EXIT: HIGH_PROB trades open >= 30 min with PnL
-                # still <= 0 get closed. Placed after CONFIRM_REVERSAL
-                # (which HIGH_PROB tier skips) and before KILL in the
+                # still <= 0 get closed. Placed before KILL in the
                 # exit stack.
                 if trade.get("tier") == "HIGH_PROB":
                     _hp_age = time.time() - trade.get(
@@ -2630,6 +2578,24 @@ async def _log_alert_outcome(
                 alert.get("adx1h"),
             "j15m_at_signal":
                 alert.get("j15m"),
+            "depth_bid_pct":
+                alert.get("depth_bid_pct"),
+            "depth_ask_pct":
+                alert.get("depth_ask_pct"),
+            "depth_context":
+                alert.get("depth_context"),
+            "vol_15m":
+                alert.get("vol_15m"),
+            "vol_ma15m":
+                alert.get("vol_ma15m"),
+            "vol_surge":
+                alert.get("vol_surge"),
+            "ma_stack_1h":
+                alert.get("ma_stack_1h"),
+            "btc_regime_context":
+                alert.get("btc_regime_context"),
+            "j1h_short_direction":
+                alert.get("j1h_short_direction"),
         }
         _sb.table("alert_log")\
            .insert(_row)\
