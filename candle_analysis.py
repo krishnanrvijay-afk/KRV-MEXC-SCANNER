@@ -5,7 +5,8 @@ BASE = (
   "https://contract.mexc.com"
   "/api/v1/contract/kline")
 
-def fetch(symbol, interval, start, end):
+def fetch(symbol, interval,
+          start, end):
     r = requests.get(
         f"{BASE}/{symbol}",
         params={
@@ -19,198 +20,186 @@ def fetch(symbol, interval, start, end):
         raise ValueError(str(d)[:80])
     raw = d["data"]
     out = []
-    for i in range(len(raw["time"])):
+    for i in range(
+            len(raw["time"])):
         out.append({
           "t": int(raw["time"][i]),
           "o": float(raw["open"][i]),
           "h": float(raw["high"][i]),
           "l": float(raw["low"][i]),
-          "c": float(raw["close"][i])
+          "c": float(raw["close"][i]),
+          "v": float(raw["vol"][i])
+            if "vol" in raw else 0,
         })
-    return sorted(out, key=lambda x: x["t"])
-
-def calc_kdj(candles, n=9):
-    K, D = 50.0, 50.0
-    result = []
-    for i, c in enumerate(candles):
-        w = candles[max(0, i-n+1):i+1]
-        hi = max(x["h"] for x in w)
-        lo = min(x["l"] for x in w)
-        rng = hi - lo
-        rsv = ((c["c"]-lo)/rng*100
-               if rng > 0 else 50.0)
-        K = (2/3)*K + (1/3)*rsv
-        D = (2/3)*D + (1/3)*K
-        result.append(round(3*K-2*D, 2))
-    return result
+    return sorted(
+        out, key=lambda x: x["t"])
 
 def fmt(ts):
     return datetime.fromtimestamp(
         ts, tz=timezone.utc
-    ).strftime("%H:%M")
+    ).strftime("%H:%M:%S")
 
-def pnl(entry, price, margin=5000, lev=5):
+def fmt_et(ts):
+    # UTC-4 for EDT
+    return datetime.fromtimestamp(
+        ts - 14400,
+        tz=timezone.utc
+    ).strftime("%H:%M:%S ET")
+
+def pnl_short(entry, price,
+        margin=5000, lev=5):
     sz = (margin * lev) / entry
-    return round((price - entry) * sz, 2)
+    return round(
+        (entry - price) * sz, 2)
+
+def r_val(entry, price,
+          sl, margin=5000, lev=5):
+    sz = (margin * lev) / entry
+    risk = abs(entry - sl) * sz
+    if risk == 0:
+        return 0
+    return round(
+        (entry - price) * sz
+        / risk, 3)
 
 def ts(iso):
     return int(
         datetime.fromisoformat(
-            iso.replace('+00', '')
+            iso.replace('+00','')
         ).replace(
             tzinfo=timezone.utc
         ).timestamp())
 
-# ZEC HL LONG
-# Entry:  436.4050
-# Exit:   442.0900  +$325.67
-# J1H at entry: 39.2
-# J15M at entry: 19.5
-# Duration: 2h 15m = 8100s
-# Open:  ~12:45 PM ET = 16:45 UTC
-# Close: ~3:00 PM ET  = 19:00 UTC
+# HYPE_USDT SHORT
+SYMBOL   = "HYPE_USDT"
+ENTRY    = 72.26
+SL       = 73.1629
+TP1      = 71.2851
+OPEN_TS  = ts(
+    "2026-07-06 01:26:03+00")
+CLOSE_TS = ts(
+    "2026-07-06 01:32:15+00")
+EXIT_PX  = 72.269
+EXIT_PNL = -1.25
+MFE_R    = 0.17
+MAE_R    = -0.01
 
-ENTRY_PX = 436.4050
-EXIT_PX = 442.0900
-ENTRY_TS = ts("2026-07-02 16:45:00+00")
-EXIT_TS = ts("2026-07-02 19:00:00+00")
-AFTER_TS = ts("2026-07-02 20:00:00+00")
-SYMBOL = "ZEC_USDT"
-
-print("Fetching J1H candles...")
-c1h_warm = fetch(SYMBOL, "Min60",
-    ENTRY_TS - 7200,
-    AFTER_TS + 3600)
-j1h_vals = calc_kdj(c1h_warm)
-j1h_map = {c["t"]: j1h_vals[i]
-    for i, c in enumerate(c1h_warm)}
-
-def get_j1h(t):
-    bucket = (t // 3600) * 3600
-    for d in [0, -3600, 3600]:
-        if bucket+d in j1h_map:
-            return j1h_map[bucket+d]
-    return None
+# Fetch 60 min before open
+# to 60 min after close
+START = OPEN_TS - 3600
+END   = CLOSE_TS + 3600
 
 print("Fetching Min1 candles...")
-c1 = fetch(SYMBOL, "Min1",
-    ENTRY_TS - 60,
-    AFTER_TS + 60)
-
-trade_c = [c for c in c1
-    if c["t"] >= ENTRY_TS - 30
-    and c["t"] <= AFTER_TS]
+candles = fetch(
+    SYMBOL, "Min1", START, END)
 
 print(f"\n{'='*80}")
-print(f"  ZEC LONG — SIGNAL EXHAUSTION FORENSIC")
-print(f"  Entry: {ENTRY_PX}  "
-      f"Exit: {EXIT_PX}  "
-      f"+$325.67")
-print(f"  J1H at entry: 39.2  "
-      f"J15M at entry: 19.5")
+print(f"  HYPE_USDT SHORT FORENSIC")
+print(f"  Entry: {ENTRY}"
+      f"  SL: {SL}"
+      f"  TP1: {TP1}")
+print(f"  Open:  {fmt_et(OPEN_TS)}"
+      f"  Close: {fmt_et(CLOSE_TS)}")
+print(f"  Exit PX: {EXIT_PX}"
+      f"  PnL: {EXIT_PNL}"
+      f"  MFE: {MFE_R}R"
+      f"  MAE: {MAE_R}R")
 print(f"{'='*80}")
-print(f"  {'TIME':>5}  "
-      f"{'PRICE':>9}  "
-      f"{'J1H':>7}  "
-      f"{'J1H_PK':>7}  "
-      f"{'DECAY':>7}  "
-      f"{'PNL':>9}  "
-      f"NOTE")
-print(f"  {'-'*72}")
+print(f"  {'TIME ET':>10}"
+      f"  {'OPEN':>10}"
+      f"  {'HIGH':>10}"
+      f"  {'LOW':>10}"
+      f"  {'CLOSE':>10}"
+      f"  {'PNL_C':>9}"
+      f"  {'PNL_H':>9}"
+      f"  {'PNL_L':>9}"
+      f"  {'R_C':>6}"
+      f"  {'NOTE'}")
+print(f"  {'-'*110}")
 
-j1h_peak = None
-se_fired_ts = None
-se_fired_pnl = None
-post_exit_high = None
-post_exit_low = None
-in_trade = True
+peak_pnl = None
+peak_ts  = None
+post_peak_low_pnl = None
 
-for c in trade_c:
-    j1h = get_j1h(c["t"])
-    cpnl = pnl(ENTRY_PX, c["c"])
-    p_hi = pnl(ENTRY_PX, c["h"])
-    p_lo = pnl(ENTRY_PX, c["l"])
+for c in candles:
+    p_close = pnl_short(ENTRY, c["c"])
+    p_high  = pnl_short(ENTRY, c["h"])
+    p_low   = pnl_short(ENTRY, c["l"])
+    r_close = r_val(ENTRY, c["c"], SL)
 
-    if (in_trade and
-            j1h is not None and
-            cpnl > 0):
-        if (j1h_peak is None or
-                j1h > j1h_peak):
-            j1h_peak = j1h
-
-    decay = 0
-    if (j1h_peak is not None
-            and j1h is not None):
-        decay = j1h_peak - j1h
-
-    se_would_fire = (
-        j1h_peak is not None and
-        decay >= 10 and
-        cpnl > 0 and
-        se_fired_ts is None)
-
-    if se_would_fire:
-        se_fired_ts = c["t"]
-        se_fired_pnl = cpnl
-
-    is_after_exit = (
-        c["t"] > EXIT_TS)
-    if is_after_exit:
-        in_trade = False
-        if (post_exit_high is None
-                or c["h"] >
-                post_exit_high):
-            post_exit_high = c["h"]
-        if (post_exit_low is None
-                or c["l"] <
-                post_exit_low):
-            post_exit_low = c["l"]
+    # track peak (best SHORT = lowest price)
+    if (c["t"] >= OPEN_TS and
+            c["t"] <= CLOSE_TS):
+        if (peak_pnl is None or
+                p_low > peak_pnl):
+            peak_pnl = p_low
+            peak_ts  = c["t"]
 
     note = ""
-    if abs(c["t"]-ENTRY_TS) < 90:
+    if abs(c["t"] - OPEN_TS) < 90:
         note = "ENTRY"
-    if abs(c["t"]-EXIT_TS) < 90:
-        note = "★ SE EXIT"
-    if se_would_fire:
-        note = "★ SE FIRES"
-    if is_after_exit and not note:
+    elif abs(c["t"] - CLOSE_TS) < 90:
+        note = "★ CR EXIT"
+    elif c["t"] > CLOSE_TS:
         note = "POST-EXIT"
+        if (post_peak_low_pnl is None
+                or p_low >
+                post_peak_low_pnl):
+            post_peak_low_pnl = p_low
 
-    print(f"  {fmt(c['t']):>5}"
-          f"  {c['c']:9.3f}"
-          f"  {j1h or 0:7.1f}"
-          f"  {j1h_peak or 0:7.1f}"
-          f"  {decay:7.1f}"
-          f"  {cpnl:9.2f}"
-          f"  {note}")
+    # flag BE cross
+    if (c["t"] >= OPEN_TS and
+            c["h"] >= ENTRY and
+            not note):
+        note += " ⚡BE_CROSS"
+
+    # flag TP1 reach
+    if c["l"] <= TP1:
+        note += " ★TP1"
+
+    # flag SL proximity
+    if c["h"] >= SL * 0.998:
+        note += " ⚠SL_NEAR"
+
+    print(
+        f"  {fmt_et(c['t']):>10}"
+        f"  {c['o']:10.4f}"
+        f"  {c['h']:10.4f}"
+        f"  {c['l']:10.4f}"
+        f"  {c['c']:10.4f}"
+        f"  {p_close:9.2f}"
+        f"  {p_high:9.2f}"
+        f"  {p_low:9.2f}"
+        f"  {r_close:6.3f}"
+        f"  {note}")
 
 print(f"\n{'='*80}")
-print(f"  SIGNAL EXHAUSTION SEQUENCE")
+print(f"  TRADE SUMMARY")
 print(f"{'='*80}")
-print(f"  Entry J1H:      39.2")
-if j1h_peak:
-    print(f"  J1H peak:       "
-          f"{j1h_peak:.1f}")
-if se_fired_ts:
-    print(f"  SE fired at:    "
-          f"{fmt(se_fired_ts)}"
-          f" PnL={se_fired_pnl:+.2f}")
-print(f"  Actual exit:    "
-      f"{fmt(EXIT_TS)}"
-      f" price={EXIT_PX}"
-      f" PnL=+$325.67")
-print(f"\n  AFTER EXIT (60 min):")
-if post_exit_high:
-    post_hi_pnl = pnl(ENTRY_PX, post_exit_high)
-    print(f"  Price high:     "
-          f"{post_exit_high:.3f}"
-          f" (would have been"
-          f" +${post_hi_pnl:.2f})")
-if post_exit_low:
-    post_lo_pnl = pnl(ENTRY_PX, post_exit_low)
-    print(f"  Price low:      "
-          f"{post_exit_low:.3f}"
-          f" (would have been"
-          f" +${post_lo_pnl:.2f})")
+print(f"  Entry:        {ENTRY}")
+print(f"  Exit:         {EXIT_PX}"
+      f"  ({EXIT_PNL})")
+print(f"  Duration:     372s"
+      f" (6m 12s)")
+print(f"  MAE:          {MAE_R}R")
+print(f"  MFE:          {MFE_R}R")
+if peak_pnl:
+    print(f"  Peak PnL:     "
+          f"+${peak_pnl:.2f}"
+          f" at {fmt_et(peak_ts)}")
+if post_peak_low_pnl:
+    print(f"  Post-exit"
+          f" best PnL:  "
+          f"+${post_peak_low_pnl:.2f}"
+          f" (if held)")
+print(f"\n  CONFIRM_REVERSAL fired"
+      f" when price rose back"
+      f" to entry {ENTRY}"
+      f" at {fmt_et(CLOSE_TS)}")
+_mfe_usd = round(0.17 * abs(ENTRY - SL) * (25000 / ENTRY), 2)
+print(f"  MFE was 0.17R ="
+      f" approximately"
+      f" +${_mfe_usd}"
+      f" at best point")
 
 print("\nDone.")
