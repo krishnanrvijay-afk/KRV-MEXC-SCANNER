@@ -67,6 +67,11 @@ _sign_shadow:   dict = {}  # trade_key -> PnL-sign transition history (observati
 _signal_shadow: dict = {}  # trade_key -> signal invalidation shadow state (observation only)
 _signal_exhaustion_armed: dict = {}  # (key + "_se_armed") -> bool; SE arming state per trade
 _se_j1h_extreme: dict = {}  # key -> best J1H while cpnl > 0; LONGs: highest, SHORTs: lowest
+_candle_close_history: dict = {}
+# keyed by trade key
+# value: list of last 3 candle
+# close PnL values in order
+# oldest first e.g. [c1, c2, c3]
 
 # -- Per-pair adverse dollar cut thresholds ------------------------------------
 # If adverse PnL <= -threshold AND max favourable excursion < $10, cut immediately.
@@ -1758,6 +1763,7 @@ def _do_close_trade(key: str, trade: dict, exit_price: float, reason: str):
                 print(f"[LOCK CLEANUP FAILED] {_lk}: {_unlock_e}")
     _signal_exhaustion_armed.pop(key + "_se_armed", None)
     _se_j1h_extreme.pop(key, None)
+    _candle_close_history.pop(key, None)
     _save_state()
 
 
@@ -2385,6 +2391,80 @@ async def _exit_monitor_loop():
                               _do_close_trade(key, trade,
                                   current, reason)
                               continue
+
+                # ── 3-CANDLE LOWER LOW EXIT ──
+                # Fires when 3 consecutive
+                # 1-minute candle closes each
+                # show lower PnL than the
+                # previous close. Runs alongside
+                # PEAK_DECAY_20 -- whichever
+                # fires first wins.
+                # Only active when trade is
+                # profitable (_cpnl > 0) and
+                # has been open at least 3
+                # minutes (180s).
+
+                _trade_age = (
+                    int(time.time())
+                    - trade.get(
+                        "opened_at",
+                        int(time.time())))
+
+                if (_cpnl > 0 and
+                        _trade_age >= 180):
+
+                    _now_candle = (
+                        int(time.time())
+                        // 60) * 60
+
+                    _ch = _candle_close_history\
+                        .setdefault(key, {
+                            "last_candle_ts": 0,
+                            "closes": [],
+                        })
+
+                    # update on new candle
+                    # boundary only
+                    if _now_candle > \
+                            _ch["last_candle_ts"]:
+                        _ch["closes"].append(
+                            _cpnl)
+                        # keep last 3 only
+                        if len(_ch["closes"]) > 3:
+                            _ch["closes"] = \
+                                _ch["closes"][-3:]
+                        _ch["last_candle_ts"] = \
+                            _now_candle
+
+                        # check 3 consecutive
+                        # lower closes
+                        # C3 < C2 < C1
+                        if len(_ch["closes"]) >= 3:
+                            c1 = _ch["closes"][-3]
+                            c2 = _ch["closes"][-2]
+                            c3 = _ch["closes"][-1]
+                            if (c3 < c2 < c1
+                                    and c3 > 0
+                                    and c1 > 0):
+                                print(
+                                    f"[3C_LOWER_LOW]"
+                                    f" {sym}"
+                                    f" {direction}"
+                                    f" closes="
+                                    f"[{c1:.2f},"
+                                    f"{c2:.2f},"
+                                    f"{c3:.2f}]"
+                                    f" -- 3 consec"
+                                    f" lower closes"
+                                    f" exiting")
+                                _do_close_trade(
+                                    key, trade,
+                                    current,
+                                    "3C_LOWER_LOW")
+                                # clean up history
+                                _candle_close_history\
+                                    .pop(key, None)
+                                continue
 
                 # Signal Exhaustion -- exit when J1H turns against the trade
                 # while in profit. Tracks J1H peak (LONG) or trough (SHORT)
