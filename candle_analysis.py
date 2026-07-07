@@ -27,8 +27,6 @@ def fetch(symbol, interval, start, end):
             "h": float(raw["high"][i]),
             "l": float(raw["low"][i]),
             "c": float(raw["close"][i]),
-            "v": float(raw["vol"][i])
-                if "vol" in raw else 0.0,
         })
     return sorted(out, key=lambda x: x["t"])
 
@@ -38,16 +36,16 @@ def fmt_et(ts):
         tz=timezone.utc
     ).strftime("%H:%M:%S")
 
-def pnl_long(entry, price, margin=5000, lev=5):
+def pnl_short(entry, price, margin=5000, lev=5):
     sz = (margin * lev) / entry
-    return round((price - entry) * sz, 2)
+    return round((entry - price) * sz, 2)
 
-def r_val(entry, price, sl, margin=5000, lev=5):
+def r_val_short(entry, price, sl, margin=5000, lev=5):
     sz = (margin * lev) / entry
-    risk = abs(entry - sl) * sz
+    risk = abs(sl - entry) * sz
     if risk == 0:
         return 0
-    return round((price - entry) * sz / risk, 3)
+    return round((entry - price) * sz / risk, 3)
 
 def ts(iso):
     return int(
@@ -57,125 +55,154 @@ def ts(iso):
             tzinfo=timezone.utc
         ).timestamp())
 
-# DOGE_USDT LONG KILL
-SYMBOL   = "DOGE_USDT"
-ENTRY    = 0.07681
-SL       = 0.076072
-TP1      = 0.077608
-OPEN_TS  = ts("2026-07-06 23:31:13+00")
-CLOSE_TS = ts("2026-07-07 00:08:59+00")
-EXIT_PX  = 0.0765
-EXIT_PNL = -100.9
-MAE_R    = -0.42
-MFE_R    = 0.05
+def simulate_3l(label, symbol,
+        entry, sl, tp1,
+        open_ts, close_ts,
+        exit_reason, exit_pnl,
+        mae_r, mfe_r):
 
-START = OPEN_TS - 1800
-END   = CLOSE_TS + 900
+    print(f"\n{'='*95}")
+    print(f"  {label}")
+    print(f"  entry={entry}  SL={sl}  TP1={tp1}")
+    print(f"  open={fmt_et(open_ts)} ET  close={fmt_et(close_ts)} ET")
+    print(f"  exit={exit_reason}  pnl={exit_pnl:+.2f}  mae={mae_r}R  mfe={mfe_r}R")
+    print(f"{'='*95}")
 
-print("Fetching candles...")
-candles = fetch(SYMBOL, "Min1", START, END)
+    candles = fetch(symbol, "Min1", open_ts - 300, close_ts + 900)
 
-print(f"\n{'='*90}")
-print(f"  DOGE_USDT LONG KILL FORENSIC")
-print(f"  Entry: {ENTRY}  SL: {SL}  TP1: {TP1}")
-print(f"  Open: {fmt_et(OPEN_TS)} ET  Close: {fmt_et(CLOSE_TS)} ET")
-print(f"  Actual exit: {EXIT_PX}  PnL: {EXIT_PNL}  MAE: {MAE_R}R  MFE: {MFE_R}R")
-print(f"  Duration: {2266}s (37m 46s)")
-print(f"{'='*90}")
-print(f"  {'TIME':>10}"
-      f"  {'HIGH':>9}"
-      f"  {'LOW':>9}"
-      f"  {'CLOSE':>9}"
-      f"  {'PNL':>9}"
-      f"  {'R':>6}"
-      f"  {'AGE':>5}"
-      f"  {'BOUNDARY_H':>12}"
-      f"  {'3H_SIGNAL':>10}"
-      f"  NOTE")
-print(f"  {'-'*105}")
+    if not candles:
+        print("  no candle data")
+        return
 
-# simulate 3H_LOWER_HIGH using candle close as boundary price proxy
-boundary_prices = []
-last_candle_ts = 0
-triggered_3h = None
-triggered_3h_pnl = None
-triggered_3h_r = None
+    print(f"\n  {'TIME':>10}"
+          f"  {'HIGH':>9}"
+          f"  {'LOW':>9}"
+          f"  {'CLOSE':>9}"
+          f"  {'PNL':>9}"
+          f"  {'R':>6}"
+          f"  {'AGE':>5}"
+          f"  {'BOUNDARY':>10}"
+          f"  {'3L_SIG':>8}"
+          f"  NOTE")
+    print(f"  {'-'*105}")
 
-for c in candles:
-    if c["t"] < OPEN_TS:
-        continue
-    if c["t"] > CLOSE_TS + 600:
-        break
+    boundary_prices = []
+    last_candle_ts = 0
+    triggered = None
+    triggered_pnl = None
+    triggered_r = None
+    first_profitable_ts = None
 
-    age = c["t"] - OPEN_TS
-    cpnl = pnl_long(ENTRY, c["c"])
-    cr = r_val(ENTRY, c["c"], SL)
+    for c in candles:
+        if c["t"] < open_ts:
+            continue
+        if c["t"] > close_ts + 600:
+            break
 
-    now_candle = (c["t"] // 60) * 60
-    boundary_signal = "---"
+        age = c["t"] - open_ts
+        cpnl = pnl_short(entry, c["c"])
+        cr = r_val_short(entry, c["c"], sl)
 
-    if now_candle > last_candle_ts:
-        boundary_prices.append(c["c"])
-        if len(boundary_prices) > 3:
-            boundary_prices = boundary_prices[-3:]
-        last_candle_ts = now_candle
+        if cpnl > 0 and first_profitable_ts is None:
+            first_profitable_ts = c["t"]
 
-        if (age >= 180
-                and cpnl <= 0
-                and len(boundary_prices) >= 3
-                and triggered_3h is None):
-            b1 = boundary_prices[-3]
-            b2 = boundary_prices[-2]
-            b3 = boundary_prices[-1]
-            if b3 < b2 < b1:
-                triggered_3h = c["t"]
-                triggered_3h_pnl = cpnl
-                triggered_3h_r = cr
-                boundary_signal = "★ FIRE"
-            else:
-                boundary_signal = "no"
-        elif triggered_3h is None:
-            boundary_signal = "warming"
+        now_candle = (c["t"] // 60) * 60
+        sig = "---"
 
-    note = ""
-    if c["t"] == OPEN_TS:
-        note = "ENTRY"
-    elif abs(c["t"] - CLOSE_TS) < 90:
-        note = "★ KILL EXIT"
-    elif c["t"] > CLOSE_TS:
-        note = "post-exit"
-    elif triggered_3h and c["t"] >= triggered_3h:
-        note = "3H would have exited"
+        if now_candle > last_candle_ts:
+            boundary_prices.append(c["c"])
+            if len(boundary_prices) > 3:
+                boundary_prices = boundary_prices[-3:]
+            last_candle_ts = now_candle
 
-    bp_str = (
-        f"{boundary_prices[-1]:.5f}"
-        if boundary_prices else "---")
+            if (age >= 180
+                    and cpnl <= 0
+                    and len(boundary_prices) >= 3
+                    and triggered is None):
+                b1 = boundary_prices[-3]
+                b2 = boundary_prices[-2]
+                b3 = boundary_prices[-1]
+                if b3 > b2 > b1:
+                    triggered = c["t"]
+                    triggered_pnl = cpnl
+                    triggered_r = cr
+                    sig = "★ FIRE"
+                else:
+                    sig = "no"
+            elif triggered is None:
+                sig = "warming"
 
-    print(
-        f"  {fmt_et(c['t']):>10}"
-        f"  {c['h']:9.5f}"
-        f"  {c['l']:9.5f}"
-        f"  {c['c']:9.5f}"
-        f"  {cpnl:9.2f}"
-        f"  {cr:6.3f}"
-        f"  {age:5}s"
-        f"  {bp_str:>12}"
-        f"  {boundary_signal:>10}"
-        f"  {note}")
+        note = ""
+        if abs(c["t"] - open_ts) < 90:
+            note = "ENTRY"
+        elif abs(c["t"] - close_ts) < 90:
+            note = f"★ {exit_reason}"
+        elif c["t"] > close_ts:
+            note = "post-exit"
+        elif triggered and c["t"] >= triggered:
+            note = "3L would exit"
+        elif first_profitable_ts and c["t"] >= first_profitable_ts and not note:
+            note = "PROFITABLE"
 
-print(f"\n{'='*90}")
-print(f"  SIMULATION SUMMARY")
-print(f"{'='*90}")
-print(f"  Actual KILL exit: {EXIT_PX}  PnL: {EXIT_PNL}  at {fmt_et(CLOSE_TS)} ET")
+        bp_str = (
+            f"{boundary_prices[-1]:.5f}"
+            if boundary_prices else "---")
 
-if triggered_3h:
-    saving = abs(EXIT_PNL) - abs(triggered_3h_pnl)
-    print(f"  3H_LOWER_HIGH would have fired at: {fmt_et(triggered_3h)} ET")
-    print(f"  PnL at 3H exit: {triggered_3h_pnl:.2f}")
-    print(f"  R at 3H exit: {triggered_3h_r:.3f}R")
-    print(f"  Capital saved vs KILL: ${saving:.2f}")
-    print(f"  Time saved: {(CLOSE_TS-triggered_3h)//60} minutes earlier")
-else:
-    print(f"  3H_LOWER_HIGH did NOT trigger during this trade")
+        print(
+            f"  {fmt_et(c['t']):>10}"
+            f"  {c['h']:9.5f}"
+            f"  {c['l']:9.5f}"
+            f"  {c['c']:9.5f}"
+            f"  {cpnl:9.2f}"
+            f"  {cr:6.3f}"
+            f"  {age:5}s"
+            f"  {bp_str:>10}"
+            f"  {sig:>8}"
+            f"  {note}")
 
-print("\nDone.")
+    print(f"\n  SUMMARY:")
+    print(f"  Actual exit: {exit_reason}  pnl={exit_pnl:+.2f}  at {fmt_et(close_ts)}")
+
+    if triggered:
+        impact = exit_pnl - triggered_pnl
+        print(f"  3L_HIGHER_LOW would fire at: {fmt_et(triggered)} ET")
+        print(f"  PnL at 3L exit: {triggered_pnl:.2f} ({triggered_r:.3f}R)")
+        if triggered_pnl < 0:
+            print(f"  ★ CUTS A LOSER — saves ${abs(triggered_pnl):.2f} vs holding")
+        else:
+            print(f"  ⚠ CUTS A WINNER early at +${triggered_pnl:.2f} vs actual {exit_pnl:+.2f}")
+    else:
+        print(f"  3L_HIGHER_LOW did NOT trigger")
+        if first_profitable_ts:
+            age_to_profit = first_profitable_ts - open_ts
+            print(f"  Trade went profitable at {fmt_et(first_profitable_ts)} ET"
+                  f" (age {age_to_profit}s) before 3L could arm")
+
+TRADES = [
+    ("ARB_USDT SHORT 3C_LOWER_LOW +$102",
+     "ARB_USDT",
+     0.07874, 0.079941, 0.077579,
+     ts("2026-07-07 07:31:13+00"),
+     ts("2026-07-07 07:40:06+00"),
+     "3C_LOWER_LOW", 101.6,
+     -0.02, 0.31),
+
+    ("HYPE_USDT SHORT PEAK_DECAY_20 +$76",
+     "HYPE_USDT",
+     70.852, 71.772063, 69.929937,
+     ts("2026-07-07 07:38:02+00"),
+     ts("2026-07-07 07:55:11+00"),
+     "PEAK_DECAY_20", 75.51,
+     -0.15, 0.31),
+]
+
+print("3L_HIGHER_LOW INTERFERENCE CHECK")
+print("2 overnight SHORT winners\n")
+
+for t in TRADES:
+    try:
+        simulate_3l(*t)
+    except Exception as e:
+        print(f"\n{t[0]}: ERROR {e}")
+
+print("\nAll done.")
