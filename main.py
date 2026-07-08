@@ -998,6 +998,13 @@ async def _do_open_trade(
         "adx1h":      alert_data.get("adx1h")     if alert_data else None,
         "j15m":       alert_data.get("j15m")      if alert_data else None,
         "j1h":        alert_data.get("j1h")       if alert_data else None,
+        "j5m":
+            alert_data.get("j5m")
+            if alert_data else None,
+        "btc_regime_context":
+            alert_data.get(
+                "btc_regime_context")
+            if alert_data else None,
         "rsi15m":     alert_data.get("rsi15m")    if alert_data else None,
         "stoch_k":    alert_data.get("stoch_k")    if alert_data else None,
         "stoch_d":    alert_data.get("stoch_d")    if alert_data else None,
