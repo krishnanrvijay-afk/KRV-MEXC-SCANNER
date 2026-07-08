@@ -2132,7 +2132,7 @@ async def _exit_monitor_loop():
                                    else False)
                     if _be_crossed:
                         _sh["be_armed"] = True
-                    _now_candle_ts = (int(time.time()) // 60) * 60
+                    _now_candle_ts = (int(time.time()) // 300) * 300
                     if (_sh["be_armed"] and _cpnl > _sh["peak_pnl_usd"]
                             and _now_candle_ts > _sh["last_peak_candle_ts"]):
                         _sh["peak_pnl_usd"]    = _cpnl
@@ -2383,7 +2383,7 @@ async def _exit_monitor_loop():
                       _peak_age = (
                           int(time.time())
                           - _sh.get("peak_set_at_ts", 0))
-                      if _peak_age < 60:
+                      if _peak_age < 300:
                           pass  # skip decay check this cycle
                       else:
                           # Ã¢ÂÂÃ¢ÂÂ Before TP1: PEAK_DECAY_20 on both directions Ã¢ÂÂÃ¢ÂÂ
@@ -2438,7 +2438,7 @@ async def _exit_monitor_loop():
 
                     _now_candle = (
                         int(time.time())
-                        // 60) * 60
+                        // 300) * 300
 
                     _ch = _candle_close_history\
                         .setdefault(key, {
@@ -2511,7 +2511,7 @@ async def _exit_monitor_loop():
 
                     _now_candle = (
                         int(time.time())
-                        // 60) * 60
+                        // 300) * 300
 
                     _hh = _candle_high_history\
                         .setdefault(key, {
