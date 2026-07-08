@@ -1012,6 +1012,34 @@ async def _do_open_trade(
             alert_data.get(
                 "depth_ask_pct")
             if alert_data else None,
+        "depth_context":
+            alert_data.get(
+                "depth_context")
+            if alert_data else None,
+        "j1h_prev":
+            alert_data.get(
+                "j1h_prev")
+            if alert_data else None,
+        "j1h_short_direction":
+            alert_data.get(
+                "j1h_short_direction")
+            if alert_data else None,
+        "ma_stack_1h":
+            alert_data.get(
+                "ma_stack_1h")
+            if alert_data else None,
+        "vol_15m":
+            alert_data.get(
+                "vol_15m")
+            if alert_data else None,
+        "vol_ma15m":
+            alert_data.get(
+                "vol_ma15m")
+            if alert_data else None,
+        "vol_surge":
+            alert_data.get(
+                "vol_surge")
+            if alert_data else None,
         "rsi15m":     alert_data.get("rsi15m")    if alert_data else None,
         "stoch_k":    alert_data.get("stoch_k")    if alert_data else None,
         "stoch_d":    alert_data.get("stoch_d")    if alert_data else None,
