@@ -448,13 +448,6 @@ def _load_state():
                 .KILL_PCT_FLOOR = \
                 float(data[
                     "kill_pct_floor"])
-        if data.get(
-                "kill_pct_5min") \
-                is not None:
-            _scanner_mod\
-                .KILL_PCT_5MIN = \
-                float(data[
-                    "kill_pct_5min"])
 
         # -- New-day check ------------------------------------------------------
         today_str = datetime.now(ET).strftime("%Y-%m-%d")
@@ -1312,11 +1305,6 @@ async def _scan_loop():
                     print(f"[GATE] SESSION HALT - {sym} {dir_} halted for {get_session_name()} session (2 SL hits)")
                     continue
 
-                # Issue 2 fix: set cooldown immediately when alert fires so scanner
-                # stops re-confirming the same signal on subsequent scans
-                set_close_cooldown(sym, dir_)
-                _save_state()
-
                 # Update alerts panel
                 existing = next(
                     (a for a in app_state.alerts
@@ -1361,6 +1349,10 @@ async def _scan_loop():
                     _open_key = app_state.trade_key(sym, dir_)
                     if _open_key in app_state.open_trades:
                         continue
+
+                    # Stamp cooldown only when a trade will actually open
+                    set_close_cooldown(sym, dir_)
+                    _save_state()
 
                     # Price-drift guard (formerly EXPIRED_PRICE in the pending
                     # queue) — protects against opening into a price that has
@@ -2414,7 +2406,7 @@ async def _exit_monitor_loop():
                                   continue
 
                       # Ã¢ÂÂÃ¢ÂÂ After TP1: PEAK_DECAY_10 on runner both directions Ã¢ÂÂÃ¢ÂÂ
-                      if tp1_hit and is_short:
+                      if tp1_hit:
                           _runner_decay = 0.90
                           if _cpnl < _sh["peak_pnl_usd"] \
                                   * _runner_decay:
@@ -2592,6 +2584,53 @@ async def _exit_monitor_loop():
                                 _candle_high_history\
                                     .pop(key, None)
                                 continue
+
+                # ── TIME_ADVERSE_EXIT backstop
+                # Fires when trade has been
+                # adverse or breakeven for
+                # 10 minutes with near-zero MFE.
+                # Catches choppy adverse trades
+                # that oscillate without forming
+                # clean 3H/3L pattern.
+                # mfe_r tracks peak R achieved
+                # during trade -- if < 0.05R the
+                # trade never had meaningful
+                # favorable movement.
+
+                if (_trade_age >= 600
+                        and _cpnl <= 0
+                        and not _sh.get(
+                            "be_armed", False)):
+
+                    # compute mfe_r from shadow
+                    # peak_pnl_usd and dollar_risk
+                    _dollar_risk = trade.get(
+                        "dollar_risk")
+                    if _dollar_risk and \
+                            _dollar_risk > 0:
+                        _mfe_r_cur = (
+                            _sh.get(
+                                "peak_pnl_usd",
+                                0.0)
+                            / _dollar_risk)
+                    else:
+                        _mfe_r_cur = 0.0
+
+                    if _mfe_r_cur < 0.05:
+                        print(
+                            f"[TIME_ADVERSE_EXIT]"
+                            f" {sym} {direction}"
+                            f" age={_trade_age}s"
+                            f" cpnl={_cpnl:.2f}"
+                            f" mfe_r="
+                            f"{_mfe_r_cur:.3f}R"
+                            f" -- adverse 10min"
+                            f" no recovery")
+                        _do_close_trade(
+                            key, trade,
+                            current,
+                            "TIME_ADVERSE_EXIT")
+                        continue
 
                 # Signal Exhaustion -- exit when J1H turns against the trade
                 # while in profit. Tracks J1H peak (LONG) or trough (SHORT)
@@ -3480,8 +3519,6 @@ async def get_settings():
             _scanner_mod.PAIR_COOLDOWN_SECONDS,
         "kill_pct_floor":
             _scanner_mod.KILL_PCT_FLOOR,
-        "kill_pct_5min":
-            _scanner_mod.KILL_PCT_5MIN,
     }
 
 
@@ -3547,9 +3584,6 @@ async def post_settings(request: Request):
     if "kill_pct_floor" in body:
         _scanner_mod.KILL_PCT_FLOOR = float(
             body["kill_pct_floor"])
-    if "kill_pct_5min" in body:
-        _scanner_mod.KILL_PCT_5MIN = float(
-            body["kill_pct_5min"])
 
     # Persist ALL settings to Supabase
     # NOTE: columns require migration if not yet in schema.
@@ -3591,8 +3625,6 @@ async def post_settings(request: Request):
                     _scanner_mod.PAIR_COOLDOWN_SECONDS,
                 "kill_pct_floor":
                     _scanner_mod.KILL_PCT_FLOOR,
-                "kill_pct_5min":
-                    _scanner_mod.KILL_PCT_5MIN,
             }
             _settings_payload["id"] = 1
             _sb.table("mexc_scanner_state")\
