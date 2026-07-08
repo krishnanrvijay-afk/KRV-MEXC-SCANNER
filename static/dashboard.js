@@ -319,11 +319,11 @@ function renderCards() {
     return true;
   });
 
-  grid.innerHTML = filtered.map(p => buildCard(p, alerts, trades, changes)).join('')
+  grid.innerHTML = filtered.map(p => buildCard(p, alerts, trades, changes, (STATE.pair_cooldowns || {})[p.symbol] || 0)).join('')
     || '<div style="padding:40px;color:#333;text-align:center;grid-column:1/-1;">No pairs match filter</div>';
 }
 
-function buildCard(p, alerts, trades, changes) {
+function buildCard(p, alerts, trades, changes, cdRemaining = 0) {
   const sym    = p.symbol;
   const price  = p.price   || 0;
   const j15m   = p.j15m    || 0;
@@ -525,6 +525,14 @@ function buildCard(p, alerts, trades, changes) {
     if (longFull  && hasAlert) pills += `<span class="pill pill-alert"> ALERT</span>`;
   }
 
+  let cdHtml = '';
+  if (cdRemaining > 0) {
+    const mins = Math.floor(cdRemaining / 60);
+    const secs = Math.floor(cdRemaining % 60);
+    const cdStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    cdHtml = `<div style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:9px;font-weight:700;color:#ffaa00"><span>⏱</span><span>${cdStr}</span></div>`;
+  }
+
   return `<div class="${cardCls}" style="${glowStyle}">
     <div class="card-top">
       <div class="card-sym-block">
@@ -537,6 +545,7 @@ function buildCard(p, alerts, trades, changes) {
         </div>
       </div>
     </div>
+    ${cdHtml}
     <div class="card-adx-compact"><span class="adx-cl">ADX</span><span class="adx-cv" style="color:${adxColor}">${adx1h.toFixed(1)}</span><span class="card-meta-sep"></span><span class="adx-cl">J15M</span><span class="adx-cv" style="color:${j15m < 20 ? '#00ff88' : j15m > 80 ? '#ff4444' : '#fff'}">${j15m.toFixed(0)}</span><span class="card-meta-sep"></span><span class="adx-cl">J1H</span><span class="adx-cv" style="color:${j1h < 40 ? '#00ff88' : j1h > 60 ? '#ff4444' : '#fff'}">${j1h.toFixed(0)}</span></div>
     ${rows}
     ${confBars}
