@@ -2073,19 +2073,8 @@ async def _exit_monitor_loop():
                     _adverse_pct >=
                     _scanner_mod.KILL_PCT_FLOOR
                 )
-                # Tier 2: tighter check after 5min
-                _kill_5min_hit = (
-                    _elapsed >= 300 and
-                    _adverse_pct >=
-                    _scanner_mod.KILL_PCT_5MIN
-                )
-                if _kill_floor_hit or _kill_5min_hit:
-                    _kill_tier = (
-                        "FLOOR" if _kill_floor_hit
-                        else "5MIN"
-                    )
+                if _kill_floor_hit:
                     print(f"[KILL] MEXC {sym} {direction}"
-                          f" tier={_kill_tier}"
                           f" adverse_pct={_adverse_pct*100:.2f}%"
                           f" elapsed={_elapsed:.0f}s")
                     _do_close_trade(
