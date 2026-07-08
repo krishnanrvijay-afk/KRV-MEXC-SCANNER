@@ -33,17 +33,27 @@ def fetch(symbol, interval,
     return sorted(
         out, key=lambda x: x["t"])
 
+def compute_kdj(candles, n=9):
+    K, D = 50.0, 50.0
+    result = []
+    for i, c in enumerate(candles):
+        w = candles[max(0,i-n+1):i+1]
+        hi = max(x["h"] for x in w)
+        lo = min(x["l"] for x in w)
+        rng = hi - lo
+        rsv = ((c["c"]-lo)/rng*100
+               if rng > 0 else 50.0)
+        K = (2/3)*K + (1/3)*rsv
+        D = (2/3)*D + (1/3)*K
+        result.append(
+            round(3*K-2*D, 2))
+    return result
+
 def fmt_et(ts):
     return datetime.fromtimestamp(
         ts - 14400,
         tz=timezone.utc
-    ).strftime("%H:%M:%S")
-
-def pnl_long(entry, price,
-        margin=5000, lev=5):
-    sz = (margin * lev) / entry
-    return round(
-        (price - entry) * sz, 2)
+    ).strftime("%H:%M")
 
 def ts(iso):
     return int(
@@ -53,143 +63,136 @@ def ts(iso):
             tzinfo=timezone.utc
         ).timestamp())
 
-SYMBOL   = "NEAR_USDT"
-ENTRY    = 1.8658
-SL       = None
-BE_PRICE = ENTRY * 0.999
-OPEN_TS  = ts(
-    "2026-07-08 21:01:17+00")
-CLOSE_TS = ts(
-    "2026-07-08 21:14:01+00")
-EXIT_PNL = -44.89
-MAE_R    = -0.14
-
-START = OPEN_TS - 300
-END   = CLOSE_TS + 300
+SYMBOL    = "HYPE_USDT"
+SIGNAL_TS = ts(
+    "2026-07-08 22:04:17+00")
+START     = ts(
+    "2026-07-08 21:00:00+00")
+END       = ts(
+    "2026-07-08 22:15:00+00")
 
 print("Fetching candles...")
-c1m = fetch(SYMBOL, "Min1",
+c1m  = fetch(SYMBOL,"Min1",
+    START, END)
+c5m  = fetch(SYMBOL,"Min5",
+    START, END)
+c15m = fetch(SYMBOL,"Min15",
     START, END)
 
-print(f"\n{'='*90}")
-print(f"  NEAR_USDT LONG —"
-      f" 3H_LOWER_HIGH FORENSIC")
-print(f"  Entry: {ENTRY}"
-      f"  BE_PRICE: {BE_PRICE:.5f}")
-print(f"  Open: {fmt_et(OPEN_TS)}"
-      f" ET  Close:"
-      f" {fmt_et(CLOSE_TS)} ET")
-print(f"  Actual exit: {EXIT_PNL}"
-      f"  MAE: {MAE_R}R")
-print(f"{'='*90}")
-print(f"  {'TIME':>10}"
+j1m  = compute_kdj(c1m)
+j5m_v  = compute_kdj(c5m)
+j15m_v = compute_kdj(c15m)
+
+j5m_map = {}
+for i,c in enumerate(c5m):
+    for o in range(5):
+        j5m_map[c["t"]+o*60] = \
+            j5m_v[i]
+
+j15m_map = {}
+for i,c in enumerate(c15m):
+    for o in range(15):
+        j15m_map[c["t"]+o*60] = \
+            j15m_v[i]
+
+print(f"\n{'='*85}")
+print(f"  HYPE_USDT SHORT —"
+      f" OPTION A GATE DIAGNOSTIC")
+print(f"  Gate: J5M > 80 AND"
+      f" J15M > 80 simultaneously")
+print(f"  Signal fired:"
+      f" {fmt_et(SIGNAL_TS)} ET")
+print(f"{'='*85}")
+print(f"  {'TIME':>5}"
       f"  {'CLOSE':>9}"
-      f"  {'PNL':>9}"
-      f"  {'AGE':>5}"
-      f"  {'BE_ARMED':>8}"
-      f"  {'BOUNDARY':>10}"
-      f"  {'PRICES[-3:]':>22}"
-      f"  {'3H_SIG':>8}"
+      f"  {'J1M':>7}"
+      f"  {'J5M':>7}"
+      f"  {'J15M':>7}"
+      f"  {'J5>80':>6}"
+      f"  {'J15>80':>7}"
+      f"  {'BOTH':>5}"
       f"  NOTE")
-print(f"  {'-'*100}")
+print(f"  {'-'*78}")
 
-boundary_prices = []
-last_candle_ts = 0
-be_armed = False
-triggered = None
-triggered_pnl = None
+first_both = None
+first_j5m  = None
+first_j15m = None
 
-for c in c1m:
-    if c["t"] < OPEN_TS:
-        continue
-    if c["t"] > CLOSE_TS + 120:
-        break
+for i, c in enumerate(c1m):
+    j1  = j1m[i]
+    j5  = j5m_map.get(c["t"], 50)
+    j15 = j15m_map.get(c["t"], 50)
 
-    age = c["t"] - OPEN_TS
-    cpnl = pnl_long(ENTRY, c["c"])
+    j5_ok  = j5  > 80
+    j15_ok = j15 > 80
+    both   = j5_ok and j15_ok
 
-    # be_armed tracking
-    if not be_armed and \
-            c["c"] <= BE_PRICE:
-        be_armed = True
-
-    # 1M boundary
-    now_b = (c["t"] // 60) * 60
-    sig = "---"
-    boundary_str = ""
-
-    if now_b > last_candle_ts:
-        boundary_prices.append(
-            c["c"])
-        if len(boundary_prices) > 3:
-            boundary_prices = \
-                boundary_prices[-3:]
-        last_candle_ts = now_b
-        boundary_str = str(
-            [round(x,5) for x in
-             boundary_prices])
-
-        if (age >= 180
-                and cpnl <= 0
-                and not be_armed
-                and len(
-                    boundary_prices)
-                    >= 3
-                and triggered
-                    is None):
-            p1 = boundary_prices[-3]
-            p2 = boundary_prices[-2]
-            p3 = boundary_prices[-1]
-            if p3 < p2 < p1:
-                triggered = c["t"]
-                triggered_pnl = cpnl
-                sig = "★ FIRE"
-            else:
-                sig = "no"
-        elif triggered is None:
-            sig = "warm"
+    if j5_ok and first_j5m is None:
+        first_j5m = c["t"]
+    if j15_ok and first_j15m is None:
+        first_j15m = c["t"]
+    if both and first_both is None:
+        first_both = c["t"]
 
     note = ""
-    if abs(c["t"]-OPEN_TS) < 90:
-        note = "ENTRY"
-    elif abs(c["t"]-
-             CLOSE_TS) < 90:
-        note = "★ EXIT"
-    elif triggered and \
-            c["t"] >= triggered:
-        note = "post-fire"
+    if abs(c["t"]-SIGNAL_TS) < 90:
+        note = "★ SIGNAL FIRED"
+    elif both:
+        note = "⚡ GATE OPEN"
+    elif j5_ok and not j15_ok:
+        note = "J5M only"
+    elif j15_ok and not j5_ok:
+        note = "J15M only"
 
     print(
-        f"  {fmt_et(c['t']):>10}"
-        f"  {c['c']:9.5f}"
-        f"  {cpnl:9.2f}"
-        f"  {age:5}s"
-        f"  {str(be_armed):>8}"
-        f"  {now_b:>10}"
-        f"  {boundary_str:>22}"
-        f"  {sig:>8}"
+        f"  {fmt_et(c['t']):>5}"
+        f"  {c['c']:9.3f}"
+        f"  {j1:7.1f}"
+        f"  {j5:7.1f}"
+        f"  {j15:7.1f}"
+        f"  {'YES' if j5_ok else '---':>6}"
+        f"  {'YES' if j15_ok else '---':>7}"
+        f"  {'✓' if both else ' ':>5}"
         f"  {note}")
 
-print(f"\n{'='*90}")
+print(f"\n{'='*85}")
 print(f"  SUMMARY")
-print(f"{'='*90}")
-if triggered:
-    diff = abs(EXIT_PNL) - \
-        abs(triggered_pnl)
-    print(f"  3H fired at:"
-          f" {fmt_et(triggered)} ET")
-    print(f"  PnL at fire:"
-          f" {triggered_pnl:.2f}")
-    print(f"  Actual exit:"
-          f" {EXIT_PNL}")
-    print(f"  Difference:"
-          f" ${diff:.2f}")
+print(f"{'='*85}")
+
+if first_j5m:
+    lag = (SIGNAL_TS-first_j5m)//60
+    print(f"  J5M first > 80:"
+          f" {fmt_et(first_j5m)} ET"
+          f" ({lag}m before signal)")
 else:
-    print(f"  3H never fired"
-          f" in simulation")
-    print(f"  be_armed at close:"
-          f" {be_armed}")
-    print(f"  Final boundary"
-          f" prices: {boundary_prices}")
+    print(f"  J5M never > 80"
+          f" before signal")
+
+if first_j15m:
+    lag = (SIGNAL_TS-first_j15m)//60
+    print(f"  J15M first > 80:"
+          f" {fmt_et(first_j15m)} ET"
+          f" ({lag}m before signal)")
+else:
+    print(f"  J15M never > 80"
+          f" before signal")
+
+if first_both:
+    lag = (SIGNAL_TS-first_both)//60
+    print(f"  BOTH first > 80:"
+          f" {fmt_et(first_both)} ET"
+          f" ({lag}m before signal)")
+    print(f"  Gate was open for"
+          f" {lag} minutes before"
+          f" signal fired")
+    print(f"  WHY DID SIGNAL"
+          f" NOT FIRE EARLIER?")
+else:
+    print(f"  BOTH never > 80"
+          f" simultaneously"
+          f" before signal")
+    print(f"  → J15M was the"
+          f" bottleneck — it"
+          f" lagged J5M")
 
 print("\nDone.")
