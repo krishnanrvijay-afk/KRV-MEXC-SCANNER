@@ -154,7 +154,6 @@ KILL_GRACE_SECONDS: int = 90
 KILL_PCT_FLOOR: float = 0.006
 # 0.6% adverse from entry, checked
 # every scan, any time elapsed.
-KILL_PCT_5MIN: float = 0.004
 SE_J1H_DECAY_PTS: float = 10.0
 # J1H decay threshold for Signal Exhaustion.
 # LONG: SE fires when J1H drops 10+ pts below peak.
