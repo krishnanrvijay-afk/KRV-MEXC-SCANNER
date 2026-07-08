@@ -30,9 +30,8 @@ def kill_fires(entry_px, current, is_short, elapsed):
     """Return (fires, adv_pct, tier_str) mirroring main.py KILL block."""
     adv = adverse_pct(entry_px, current, is_short)
     floor_hit  = adv >= scanner.KILL_PCT_FLOOR
-    fivemin_hit = elapsed >= 300 and adv >= scanner.KILL_PCT_5MIN
-    tier = "FLOOR" if floor_hit else "5MIN"
-    return (floor_hit or fivemin_hit), adv, tier
+    tier = "FLOOR" if floor_hit else "NONE"
+    return floor_hit, adv, tier
 
 def sl_breach(sl_price, current, is_short):
     """Mirror main.py SL breach condition exactly."""
@@ -66,8 +65,8 @@ def pd20_fires(is_short, be_armed, peak, cpnl, sym="SOL"):
     return cpnl < peak * threshold
 
 def pd10_fires(is_short, tp1_hit, peak, cpnl):
-    """Mirror main.py PEAK_DECAY_10 condition (SHORT only, after TP1)."""
-    if not is_short or not tp1_hit:
+    """Mirror main.py PEAK_DECAY_10 condition (both directions, after TP1)."""
+    if not tp1_hit:
         return False
     return cpnl < peak * 0.90
 
@@ -88,9 +87,9 @@ fires, adv, tier = kill_fires(1000.0, 1006.0, True, 10)
 chk("K2", fires and tier == "FLOOR",
     f"SHORT adverse 0.6% (1000→1006) → KILL FLOOR fires (adverse_pct={adv*100:.3f}%)")
 
-fires, adv, tier = kill_fires(100.0, 99.6, False, 300)
-chk("K3", fires and tier == "5MIN",
-    f"LONG adverse 0.4% at 300s → KILL 5MIN fires (adverse_pct={adv*100:.3f}%)")
+fires, adv, _ = kill_fires(100.0, 99.6, False, 300)
+chk("K3", not fires,
+    f"LONG adverse 0.4% at 300s → KILL does NOT fire (5MIN removed; below FLOOR)")
 
 fires, adv, _ = kill_fires(100.0, 99.7, False, 300)
 chk("K4", not fires,
@@ -154,16 +153,16 @@ chk("PD2", not pd20_fires(False, True, 100.0, 75.0),
 chk("PD3", pd10_fires(True, True, 100.0, 88.0),
     "SHORT tp1_hit peak=$100 cpnl=$88 → PEAK_DECAY_10 fires (88 < 90)")
 
-chk("PD4", not pd10_fires(False, True, 100.0, 88.0),
-    "LONG tp1_hit → PEAK_DECAY_10 does NOT fire (LONG excluded)")
+chk("PD4", pd10_fires(False, True, 100.0, 88.0),
+    "LONG tp1_hit peak=$100 cpnl=$88 → PEAK_DECAY_10 fires (both directions after C1)")
 
 # ── IMPORT / constant tests ────────────────────────────────────────────────────
 
 chk("I1", hasattr(scanner, "KILL_PCT_FLOOR") and scanner.KILL_PCT_FLOOR == 0.006,
     f"scanner.KILL_PCT_FLOOR exists = {getattr(scanner, 'KILL_PCT_FLOOR', 'MISSING')}")
 
-chk("I2", hasattr(scanner, "KILL_PCT_5MIN") and scanner.KILL_PCT_5MIN == 0.004,
-    f"scanner.KILL_PCT_5MIN exists = {getattr(scanner, 'KILL_PCT_5MIN', 'MISSING')}")
+chk("I2", not hasattr(scanner, "KILL_PCT_5MIN"),
+    "scanner.KILL_PCT_5MIN does NOT exist (removed dead constant)")
 
 chk("I3", hasattr(scanner, "SE_J1H_DECAY_PTS") and scanner.SE_J1H_DECAY_PTS == 10.0,
     f"scanner.SE_J1H_DECAY_PTS exists = {getattr(scanner, 'SE_J1H_DECAY_PTS', 'MISSING')}")
@@ -245,8 +244,6 @@ settings_response = {
         scanner.PAIR_COOLDOWN_SECONDS,
     "kill_pct_floor":
         scanner.KILL_PCT_FLOOR,
-    "kill_pct_5min":
-        scanner.KILL_PCT_5MIN,
     "se_j1h_decay_pts":
         scanner.SE_J1H_DECAY_PTS,
 }
@@ -255,7 +252,6 @@ required_fields = [
     "j1h_long_max",
     "j1h_short_max",
     "kill_pct_floor",
-    "kill_pct_5min",
     "se_j1h_decay_pts",
     "margin_per_trade",
     "adx_min_long",
@@ -264,6 +260,7 @@ required_fields = [
 ]
 deprecated_fields = [
     "kill_grace_seconds",
+    "kill_pct_5min",
 ]
 
 for field in required_fields:
