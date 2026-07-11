@@ -52,7 +52,6 @@ def _base(sym):
 
 _last_stoch:  dict[str, tuple] = {}   # keyed symbol -> (stoch_k, stoch_d) from previous scan
 _last_stoch_fast: dict[str, tuple] = {}   # keyed symbol -> (stoch_k_fast, stoch_d_fast) 8,3,3
-_j1h_history:     dict[str, float] = {}   # symbol -> previous j1h value for J1H_RISING gate
 _adverse_cluster: dict = {"long": [], "short": []}  # rolling adverse exit timestamps per direction
 _adverse_cooldown_until: dict = {"long": None, "short": None}  # graduated adverse cooldown expiry per direction
 _btc_flash_block_until: dict = {"long": None}                  # expiry for BTC 1m flash crash LONG block
@@ -248,13 +247,13 @@ def _leverage_tier(adx: float) -> tuple[str, int]:
 
 def score_bounce_short(j15m, j1h, ask_pct, adx,
                        j5m: float = 50.0, trend: str = "Neutral",
-                       stoch_k: float = 50.0, stoch_d: float = 50.0,
-                       j1h_prev: float = None) -> tuple[int, str, int]:
+                       stoch_k: float = 50.0, stoch_d: float = 50.0) -> tuple[int, str, int]:
     tier, lev = _leverage_tier(adx)
     stoch_gate = (j5m > 80 and j15m > 80)
+    _bid_pct = 100 - ask_pct
     if not (j15m > J15M_SHORT_GATE
             and stoch_gate
-            and (j1h_prev is None or j1h <= j1h_prev)):
+            and _bid_pct <= 65):
         return 0, tier, lev
     score = 4
     if j5m  > 80:              score += 2
@@ -265,13 +264,12 @@ def score_bounce_short(j15m, j1h, ask_pct, adx,
 
 def score_bounce_long(j15m, j1h, bid_pct, adx,
                       j5m: float = 50.0, trend: str = "Neutral",
-                      stoch_k: float = 50.0, stoch_d: float = 50.0,
-                      j1h_prev: float = None) -> tuple[int, str, int]:
+                      stoch_k: float = 50.0, stoch_d: float = 50.0) -> tuple[int, str, int]:
     tier, lev = _leverage_tier(adx)
     stoch_gate = (j5m < 10 and j15m < 20)
     if not (j15m < J15M_LONG_GATE
             and stoch_gate
-            and (j1h_prev is None or j1h >= j1h_prev)):
+            and bid_pct >= 45):
         return 0, tier, lev
     score = 4
     if j5m  < 20:              score += 2
@@ -438,8 +436,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
             _, _, j5m  = _compute_kdj(candles_5m[:-1])
             _, _, j15m = _compute_kdj(candles_15m[:-1])
             _, _, j1h  = _compute_kdj(candles_1h[:-1])
-            _j1h_prev  = _j1h_history.get(symbol)
-            _j1h_history[symbol] = j1h
             rsi15m     = _compute_rsi(candles_15m)
             rsi1h      = _compute_rsi(candles_1h)
             stoch_k, stoch_d           = _compute_stochastic(candles_15m)
@@ -581,21 +577,16 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                         continue
                     score, tier, lev = score_bounce_short(
                         j15m, j1h, ask_pct, adx1h, j5m=j5m, trend=trend,
-                        stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
-                        j1h_prev=_j1h_prev)
-                    _j1h_p_str  = (f"{_j1h_prev:.1f}"
-                                   if _j1h_prev is not None else "None")
-                    _j1h_dir_s  = ("FALL"
-                                   if _j1h_prev is not None and j1h <= _j1h_prev
-                                   else "FLAT/RISE")
+                        stoch_k=stoch_k_fast, stoch_d=stoch_d_fast)
+                    _bid_from_ask = 100 - ask_pct
+                    _depth_ok_s   = (_bid_from_ask <= 65)
                     _log_gates = (
                         f"j5m={j5m:.1f}(need>80)"
                         f" j15m={j15m:.1f}(need>{J15M_SHORT_GATE})"
                         f" j1h={j1h:.1f}"
-                        f" j1h_prev={_j1h_p_str}"
-                        f" j1h_dir={_j1h_dir_s}"
                         f" btc={_btc_j1h:.1f}"
-                        f" depth_bid={bid_pct:.1f}%"
+                        f" depth_bid={_bid_from_ask:.1f}%"
+                        f"({'PASS' if _depth_ok_s else 'FAIL'})"
                         f" depth_ask={ask_pct:.1f}%"
                     )
                 else:
@@ -617,21 +608,15 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                         continue
                     score, tier, lev = score_bounce_long(
                         j15m, j1h, bid_pct, adx1h, j5m=j5m, trend=trend,
-                        stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
-                        j1h_prev=_j1h_prev)
-                    _j1h_p_str  = (f"{_j1h_prev:.1f}"
-                                   if _j1h_prev is not None else "None")
-                    _j1h_dir_l  = ("RISE"
-                                   if _j1h_prev is not None and j1h >= _j1h_prev
-                                   else "FLAT/FALL")
+                        stoch_k=stoch_k_fast, stoch_d=stoch_d_fast)
+                    _depth_ok_l  = (bid_pct >= 45)
                     _log_gates = (
                         f"j5m={j5m:.1f}(need<10)"
                         f" j15m={j15m:.1f}(need<{J15M_LONG_GATE})"
                         f" j1h={j1h:.1f}"
-                        f" j1h_prev={_j1h_p_str}"
-                        f" j1h_dir={_j1h_dir_l}"
                         f" btc={_btc_j1h:.1f}"
                         f" depth_bid={bid_pct:.1f}%"
+                        f"({'PASS' if _depth_ok_l else 'FAIL'})"
                         f" depth_ask={ask_pct:.1f}%"
                     )
 
@@ -658,8 +643,8 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                         asyncio.create_task(_log_gate("MEXC", symbol, "STOCH_GATE_FAIL", direction,
                             f"j5m={j5m:.1f} j15m={j15m:.1f}"))
                     else:
-                        asyncio.create_task(_log_gate("MEXC", symbol, "J1H_DIRECTION_FAIL", direction,
-                            f"j1h={j1h:.1f} j1h_prev={_j1h_prev}"))
+                        asyncio.create_task(_log_gate("MEXC", symbol, "DEPTH_GATE_FAIL", direction,
+                            f"bid_pct={bid_pct:.1f} ask_pct={ask_pct:.1f}"))
                     continue
 
                 is_hc = score >= 10
@@ -703,11 +688,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                     "dollar_risk":  dollar_risk,
                     "j15m":         round(j15m, 2),
                     "j1h":          round(j1h, 2),
-                    "j1h_prev":     round(
-                _j1h_prev
-                if _j1h_prev is not None
-                else j1h, 2),
-                    "j1h_prev_valid": (_j1h_prev is not None),
                     "j5m":          round(j5m, 2),
                     "rsi15m":       round(rsi15m, 2),
                     "stoch_k":      round(stoch_k, 2),
@@ -749,22 +729,12 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                     "session":       get_session_name(),
                     "btc_j1h":       round(_btc_j1h, 1),
                 }
-                if direction == "SHORT":
-                    alert["j1h_short_direction"] = (
-                        "FALLING" if (_j1h_prev is not None and j1h < _j1h_prev)
-                        else "RISING" if (_j1h_prev is not None and j1h > _j1h_prev)
-                        else "FLAT")
                 _vwap_v, _vwap_pct, _vwap_pos = _compute_session_vwap(candles_15m, price)
                 if _vwap_v is not None:
                     alert["vwap_at_entry"] = _vwap_v
                     alert["vwap_pct_diff"] = _vwap_pct
                     alert["vwap_position"] = _vwap_pos
                 new_alerts.append(alert)
-                _j1h_dir_log = (
-                    ("FALL" if _j1h_prev is not None and j1h <= _j1h_prev else "FLAT")
-                    if direction == "SHORT"
-                    else ("RISE" if _j1h_prev is not None and j1h >= _j1h_prev else "FLAT")
-                )
                 log.info(
                     f"[SIGNAL] {symbol} {direction}"
                     f" tier={tier} lev={lev}x"
@@ -775,7 +745,6 @@ async def run_full_scan(client, market_health: Optional[dict] = None) -> list[di
                     f" j5m={j5m:.1f}"
                     f" j15m={j15m:.1f}"
                     f" j1h={j1h:.1f}"
-                    f" j1h_dir={_j1h_dir_log}"
                     f" btc={_btc_j1h:.1f}"
                     f"({_btc_regime_context})"
                     f" depth={bid_pct:.1f}%B/{ask_pct:.1f}%A"
@@ -807,8 +776,6 @@ async def scan_pair_state(client) -> list[dict]:
             _, _, j5m  = _compute_kdj(candles_5m[:-1])
             _, _, j15m = _compute_kdj(candles_15m[:-1])
             _, _, j1h  = _compute_kdj(candles_1h[:-1])
-            _j1h_prev  = _j1h_history.get(symbol)
-            _j1h_history[symbol] = j1h
             rsi15m     = _compute_rsi(candles_15m)
             rsi1h      = _compute_rsi(candles_1h)
             stoch_k, stoch_d           = _compute_stochastic(candles_15m)
@@ -828,8 +795,7 @@ async def scan_pair_state(client) -> list[dict]:
 
             short_score, short_tier, short_lev = score_bounce_short(
                 j15m, j1h, ask_pct, adx1h, j5m=j5m, trend=trend,
-                stoch_k=stoch_k_fast, stoch_d=stoch_d_fast,
-                j1h_prev=_j1h_prev)
+                stoch_k=stoch_k_fast, stoch_d=stoch_d_fast)
             long_score,  long_tier,  long_lev  = score_bounce_long(
                 j15m, j1h, bid_pct, adx1h, j5m=j5m, trend=trend,
                 stoch_k=stoch_k_fast, stoch_d=stoch_d_fast)
