@@ -400,7 +400,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
     for symbol in PAIRS:
         try:
             await asyncio.sleep(0.5)  # rate-limit spacing - 12 pairs x 0.5s = 6s minimum spread
-            candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
+            candles_1m, candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
 
             if not price or price == 0:
                 log.warning(f"[SCAN] {symbol} - no price, retrying in 2s...")
@@ -434,7 +434,7 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                 continue
 
             # -- Indicators ----------------------------------------------------
-            _, _, j5m  = _compute_kdj(candles_5m[:-1])
+            _, _, j5m  = _compute_kdj(candles_1m[:-1])
             _, _, j15m = _compute_kdj(candles_15m[:-1])
             _, _, j1h  = _compute_kdj(candles_1h[:-1])
             rsi15m     = _compute_rsi(candles_15m)
@@ -771,7 +771,7 @@ async def scan_pair_state(client) -> list[dict]:
     for symbol in PAIRS:
         try:
             await asyncio.sleep(0.5)  # rate-limit spacing between pairs
-            candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
+            candles_1m, candles_5m, candles_15m, candles_1h, book, price = await _fetch_pair_data(client, symbol)
             if not price:
                 await asyncio.sleep(2)
                 price = await client.get_price(symbol)
@@ -779,7 +779,7 @@ async def scan_pair_state(client) -> list[dict]:
                     states.append({"symbol": symbol, "price": 0})
                     continue
 
-            _, _, j5m  = _compute_kdj(candles_5m[:-1])
+            _, _, j5m  = _compute_kdj(candles_1m[:-1])
             _, _, j15m = _compute_kdj(candles_15m[:-1])
             _, _, j1h  = _compute_kdj(candles_1h[:-1])
             rsi15m     = _compute_rsi(candles_15m)
@@ -874,14 +874,15 @@ def _compute_session_vwap(candles_15m: list, entry_price: float):
 
 
 async def _fetch_pair_data(client, symbol: str):
-    candles_5m, candles_15m, candles_1h, book, price = await asyncio.gather(
+    candles_1m, candles_5m, candles_15m, candles_1h, book, price = await asyncio.gather(
+        client.get_candles(symbol, "1m",  30),
         client.get_candles(symbol, "5m",  100),
         client.get_candles(symbol, "15m", 100),
         client.get_candles(symbol, "1h",  100),
         client.get_orderbook(symbol, 20),
         client.get_price(symbol),
     )
-    return candles_5m, candles_15m, candles_1h, book, price
+    return candles_1m, candles_5m, candles_15m, candles_1h, book, price
 
 
 def log_startup_config():
