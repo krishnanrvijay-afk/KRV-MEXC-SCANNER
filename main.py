@@ -725,6 +725,20 @@ async def _open_trade_log_row(trade: dict):
             "chg24h_entry":    trade.get("chg24h"),
             "score":           trade.get("score"),
             "adx1h":           trade.get("adx1h"),
+            "j5m_entry":                 trade.get("j5m"),
+            "btc_regime_context":        trade.get("btc_regime_context"),
+            "depth_bid_pct_entry":       trade.get("depth_bid_pct"),
+            "depth_ask_pct_entry":       trade.get("depth_ask_pct"),
+            "depth_context_entry":       trade.get("depth_context"),
+            "vol_surge_entry":           trade.get("vol_surge"),
+            "ma_stack_1h_entry":         trade.get("ma_stack_1h"),
+            "j1h_prev_entry":            trade.get("j1h_prev"),
+            "j1h_short_direction_entry": trade.get("j1h_short_direction"),
+            "btc_j1h_entry":             trade.get("btc_j1h_entry"),
+            "size":                      trade.get("size"),
+            "vwap_at_entry":             trade.get("vwap_at_entry"),
+            "vwap_pct_diff":             trade.get("vwap_pct_diff"),
+            "vwap_position":             trade.get("vwap_position"),
         }).execute()
         print(f"[TRADE LOG OPEN] {trade['symbol']} {trade['direction']} open-row written to mexc_trade_log")
     except Exception as _e:
