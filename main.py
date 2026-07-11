@@ -2071,7 +2071,6 @@ async def _exit_monitor_loop():
                         "d30_at": None, "d30_pnl": None, "d30_phase": None,
                         "d40_at": None, "d40_pnl": None, "d40_phase": None,
                         "last_peak_candle_ts": 0,
-                        "peak_set_at_ts": 0,
                     })
                     _sz   = trade.get("remaining_size", trade.get("size", 0)) or 0
                     _ent  = trade.get("entry_price", 0) or 0
@@ -2091,7 +2090,6 @@ async def _exit_monitor_loop():
                         _sh["peak_pnl_usd"]    = _cpnl
                         _sh["peak_reached_at"] = datetime.now(timezone.utc).isoformat()
                         _sh["last_peak_candle_ts"] = _now_candle_ts
-                        _sh["peak_set_at_ts"] = int(time.time())
                         _sh["d20_at"] = _sh["d20_pnl"] = _sh["d20_phase"] = None
                         _sh["d30_at"] = _sh["d30_pnl"] = _sh["d30_phase"] = None
                         _sh["d40_at"] = _sh["d40_pnl"] = _sh["d40_phase"] = None
