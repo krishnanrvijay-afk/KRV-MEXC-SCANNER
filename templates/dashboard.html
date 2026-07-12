@@ -78,10 +78,41 @@
     70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
     100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
   }
+  :root { --brand: #f97316; }  /* MEXC orange */
   @keyframes pulse-halt {
     0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
     70%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
     100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  }
+  /* ── Branded ring dot (header) ─────────────────────────── */
+  /* Brand colour drives default ring; amber/stale on data age */
+  .pd-ring {
+    position: relative; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .pd-ring-pulse {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid var(--brand);
+    animation: pd-ringpulse 1.8s ease-out infinite;
+  }
+  .pd-ring-core {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--brand);
+    box-shadow: 0 0 8px 2px var(--brand);
+  }
+  /* halted → red ring (slow pulse) */
+  .pd-ring.halted .pd-ring-pulse { border-color: #ef4444; animation-duration: 6s; }
+  .pd-ring.halted .pd-ring-core  { background: #ef4444; box-shadow: 0 0 8px 2px #ef4444; }
+  /* amber: stale 15-90s since last successful data fetch */
+  .pd-ring.pd-amber .pd-ring-pulse { border-color: #f59e0b; animation-duration: 3s; }
+  .pd-ring.pd-amber .pd-ring-core  { background: #f59e0b; box-shadow: 0 0 8px 2px #f59e0b; }
+  /* stale: > 90s since last successful data fetch */
+  .pd-ring.pd-stale .pd-ring-pulse { border-color: #ef4444; animation-duration: 6s; }
+  .pd-ring.pd-stale .pd-ring-core  { background: #ef4444; box-shadow: 0 0 8px 2px #ef4444; }
+  @keyframes pd-ringpulse {
+    0%   { transform: scale(0.5); opacity: 0.9; }
+    100% { transform: scale(1.8); opacity: 0;   }
   }
   /* --- HDR LINE 1 --- */
   .hdr-line1 { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
@@ -637,7 +668,7 @@
 <div class="header" style="height:auto;flex-direction:column;align-items:stretch;gap:0;padding:10px 14px">
     <div class="hdr-line1">
       <div style="display:flex;align-items:center;gap:6px;min-width:0">
-        <span class="pulse-dot live" id="pulse-dot"></span>
+        <div class="pd-ring live" id="pulse-dot"><div class="pd-ring-pulse"></div><div class="pd-ring-core"></div></div>
         <span class="logo" style="color:#fff">MEXC BOUNCE <span style="color:#f97316">SCANNER</span></span>
       </div>
       <div class="hdr-line1-right">
