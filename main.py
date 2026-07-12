@@ -2492,6 +2492,10 @@ async def _exit_monitor_loop():
                                     "3H_LOWER_HIGH")
                                 _candle_high_history\
                                     .pop(key, None)
+                                # Extended cooldown: adverse structure -- 1h before re-entry
+                                set_close_cooldown(
+                                    sym, direction,
+                                    seconds=3600)
                                 # Per-pair direction session adverse-exit count
                                 _skey = f"{sym}_{direction}_{get_session_name()}"
                                 _session_sl_counts[_skey] = _session_sl_counts.get(_skey, 0) + 1
@@ -2521,6 +2525,10 @@ async def _exit_monitor_loop():
                                     "3L_HIGHER_LOW")
                                 _candle_high_history\
                                     .pop(key, None)
+                                # Extended cooldown: adverse structure -- 1h before re-entry
+                                set_close_cooldown(
+                                    sym, direction,
+                                    seconds=3600)
                                 # Per-pair direction session adverse-exit count
                                 _skey = f"{sym}_{direction}_{get_session_name()}"
                                 _session_sl_counts[_skey] = _session_sl_counts.get(_skey, 0) + 1
