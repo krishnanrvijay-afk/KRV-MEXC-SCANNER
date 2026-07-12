@@ -611,6 +611,19 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                             and len(_btc_j1h_history) >= 6
                             and _btc_j1h > _btc_j1h_history[-6]):
                         continue
+                    # J1H range gate (enforced) — blocks SHORTs outside valid bounce zone
+                    if j1h <= J1H_SHORT_MIN or j1h >= J1H_SHORT_MAX:
+                        asyncio.create_task(_log_gate(
+                            "MEXC", symbol, "J1H_RANGE_FAIL", direction,
+                            f"j1h={j1h:.1f} need "
+                            f"{J1H_SHORT_MIN}<j1h<{J1H_SHORT_MAX}"))
+                        continue
+                    # RSI floor gate (enforced) — blocks SHORTs when 15m RSI approaching oversold
+                    if rsi15m <= RSI15M_SHORT_MIN:
+                        asyncio.create_task(_log_gate(
+                            "MEXC", symbol, "RSI_FLOOR_FAIL", direction,
+                            f"rsi15m={rsi15m:.1f} need>{RSI15M_SHORT_MIN}"))
+                        continue
                     score, tier, lev = score_bounce_short(
                         j15m, j1h, ask_pct, adx1h, j5m=j5m, trend=trend,
                         stoch_k=stoch_k_fast, stoch_d=stoch_d_fast)
@@ -641,6 +654,18 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                             _btc_regime_context in (
                                 "LONG_BLOCKED",
                                 "NEUTRAL_BLOCK")):
+                        continue
+                    # J1H ceiling gate (enforced) — blocks LONGs above valid bounce zone
+                    if j1h >= J1H_LONG_MAX:
+                        asyncio.create_task(_log_gate(
+                            "MEXC", symbol, "J1H_CEILING_FAIL", direction,
+                            f"j1h={j1h:.1f} need j1h<{J1H_LONG_MAX}"))
+                        continue
+                    # RSI ceiling gate (enforced) — blocks LONGs when 15m RSI approaching overbought
+                    if rsi15m >= RSI15M_LONG_MAX:
+                        asyncio.create_task(_log_gate(
+                            "MEXC", symbol, "RSI_CEILING_FAIL", direction,
+                            f"rsi15m={rsi15m:.1f} need<{RSI15M_LONG_MAX}"))
                         continue
                     score, tier, lev = score_bounce_long(
                         j15m, j1h, bid_pct, adx1h, j5m=j5m, trend=trend,
