@@ -267,7 +267,7 @@ def score_bounce_long(j15m, j1h, bid_pct, adx,
                       j5m: float = 50.0, trend: str = "Neutral",
                       stoch_k: float = 50.0, stoch_d: float = 50.0) -> tuple[int, str, int]:
     tier, lev = _leverage_tier(adx)
-    stoch_gate = (j5m < 10 and j15m < 20)
+    stoch_gate = (j5m < 20 and j15m < 20)
     if not (j15m < J15M_LONG_GATE
             and stoch_gate
             and bid_pct >= 45):
