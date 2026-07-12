@@ -502,7 +502,12 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                           if candles_15m else 0)
 
             # -- SL distance (ATR base, floored by MIN_SL_PCT + session buffer) ---------------------------------------------------
-            _sl_atr      = atr15m * ATR_SL_MULTIPLIER
+            # R8: dynamic ATR mult — ASIA wider spreads (x1.2), US tightest (x0.9), EU baseline
+            _atr_sess    = get_session_name()
+            _atr_mult    = (ATR_SL_MULTIPLIER * 1.2 if _atr_sess == "ASIA"
+                            else ATR_SL_MULTIPLIER * 0.9 if _atr_sess == "US"
+                            else ATR_SL_MULTIPLIER)
+            _sl_atr      = atr15m * _atr_mult
             _min_sl_pct  = MIN_SL_PCT.get(_base(symbol), MIN_SL_PCT_DEFAULT)
             _sess_buf    = get_session_sl_buffer()
             _min_sl_dist = price * (_min_sl_pct + _sess_buf)
@@ -624,6 +629,14 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                             "MEXC", symbol, "SHORT_US_HALT", direction,
                             f"US session — 0% WR historical, -$1,570 net"))
                         continue
+                    # R7: Blanket ASIA SHORT block
+                    # Data: ASIA SHORT WR consistently <30% — low liquidity + BTC rises in Asian hours
+                    # Retains ASIA LONGs which have positive expectancy
+                    if _cur_sess == "ASIA":
+                        asyncio.create_task(_log_gate(
+                            "MEXC", symbol, "SHORT_ASIA_HALT", direction,
+                            f"ASIA session — structurally weak SHORTs, low liquidity"))
+                        continue
                     # Gate 2: SHORT_EU_J1H_HIGH
                     # EU + J1H >= 78: 5 losses 1 win, -$1,062 net
                     # High J1H in EU = trend has continuation room; exhaustion reversal fails
@@ -744,6 +757,14 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                         asyncio.create_task(_log_gate(
                             "MEXC", symbol, "EU_LONG_J15M_TIGHT", direction,
                             f"EU j15m={j15m:.1f} >= 15 -- EU LONGs require j15m<15"))
+                        continue
+                    # R4: MEXC ADX ceiling for LONGs (inverted gate)
+                    # Data: MEXC LONG ADX<30 = 71.4% WR; ADX>=30 = 33.3% WR
+                    # High ADX = strong trend momentum -- mean-reversion bounce unreliable
+                    if adx1h >= 30:
+                        asyncio.create_task(_log_gate(
+                            "MEXC", symbol, "ADX_CEILING_FAIL", direction,
+                            f"adx={adx1h:.1f} >= 30 -- MEXC LONGs need ADX<30 (71%WR vs 33%WR above)"))
                         continue
                     score, tier, lev = score_bounce_long(
                         j15m, j1h, bid_pct, adx1h, j5m=j5m, trend=trend,
