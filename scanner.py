@@ -239,6 +239,35 @@ def _depth_pcts(book: dict) -> tuple[float, float]:
 
 # -- Scoring -------------------------------------------------------------------
 
+
+
+def _find_book_wall(levels: list, price: float, is_bid: bool):
+    """Return the dominant wall if one exists: largest sz >= 3x avg within 1% of price.
+    is_bid=True  -> bids  (SHORT exit target: a large buy wall price is approaching).
+    is_bid=False -> asks  (LONG  exit target: a large sell wall price is approaching).
+    Returns dict {price, size, dist_pct, ratio} or None."""
+    if not levels or len(levels) < 2 or not price:
+        return None
+    sizes = [lvl["sz"] for lvl in levels]
+    avg = sum(sizes) / len(sizes)
+    if avg <= 0:
+        return None
+    max_sz = max(sizes)
+    if max_sz < 3 * avg:
+        return None
+    mi = sizes.index(max_sz)
+    wall_px = levels[mi]["px"]
+    dist_pct = ((price - wall_px) / price * 100 if is_bid
+                else (wall_px - price) / price * 100)
+    if dist_pct < 0 or dist_pct > 1.0:
+        return None
+    return {
+        "price":    wall_px,
+        "size":     round(max_sz, 3),
+        "dist_pct": round(dist_pct, 4),
+        "ratio":    round(max_sz / avg, 1),
+    }
+
 def _leverage_tier(adx: float) -> tuple[str, int]:
     if adx >= 50:
         return "HIGH_PROB", LEVERAGE_HIGH
@@ -1006,6 +1035,8 @@ async def scan_pair_state(client) -> list[dict]:
                 "adx1h":       round(adx1h, 2),
                 "bid_pct":     bid_pct,
                 "ask_pct":     ask_pct,
+                "bid_wall":    _find_book_wall(book.get("bids", []), price, True),
+                "ask_wall":    _find_book_wall(book.get("asks", []), price, False),
                 "trend":       trend,
                 "ma10":        round(ma10, 6) if ma10 else None,
                 "ma30":        round(ma30, 6) if ma30 else None,
