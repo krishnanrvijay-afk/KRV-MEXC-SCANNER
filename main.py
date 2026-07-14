@@ -3491,6 +3491,8 @@ async def get_settings():
             _scanner_mod.J1H_SHORT_MAX,
         "j1h_long_max":
             _scanner_mod.J1H_LONG_MAX,
+        "j1h_long_min":
+            _scanner_mod.J1H_LONG_MIN,
         "atr_sl_multiplier":
             _scanner_mod.ATR_SL_MULTIPLIER,
         "tp1_close_pct":
