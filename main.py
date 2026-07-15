@@ -675,6 +675,19 @@ def _append_trade_log(trade: dict, exit_price: float, reason: str, pnl: float, r
                 .eq("open_time", open_iso)\
                 .is_("close_time", "null")\
                 .execute()
+            # Fallback: try pair name with _USDT stripped in case stored differently
+            _sym_alt = trade["symbol"].replace("_USDT", "") if trade["symbol"].endswith("_USDT") else trade["symbol"] + "_USDT"
+            if _sym_alt != trade["symbol"]:
+                try:
+                    sb.table("mexc_trade_log")\
+                        .update(_tl_row)\
+                        .eq("pair",      _sym_alt)\
+                        .eq("direction", trade["direction"])\
+                        .eq("open_time", open_iso)\
+                        .is_("close_time", "null")\
+                        .execute()
+                except Exception:
+                    pass
         except Exception as _e:
             print(f"[TRADE LOG WRITE FAILED] {_e}")
 
