@@ -2029,10 +2029,11 @@ async def _exit_monitor_loop():
                                else (current - _entry) * _size)
 
                 # -- SL_PROXIMITY_EXIT: all tiers, all pairs, both directions.
-                # Exits once price has moved 60% of the way from entry to
-                # SL, regardless of MFE or whether a peak was ever reached.
-                # No arming required, no percentage-of-MFE check -- pure
-                # adverse-move-toward-SL level exit.
+                # Threshold is conditional on trade state (remaining % of SL distance):
+                #   post-TP1 runner   → 0.30 (70% consumed) — half position, tighten runner
+                #   never-green       → 0.35 (65% consumed) — no promise shown, cut earlier
+                #   armed pre-TP1     → 0.40 (60% consumed) — PEAK_GIVEBACK is primary guard
+                # Uses _peak_shadow.get(key) to read be_armed without touching shadow state.
                 _entry_sp = trade.get("entry_price", 0) or 0
                 _sl_sp    = trade.get("sl_price")
                 if _entry_sp > 0 and _sl_sp:
@@ -2046,9 +2047,15 @@ async def _exit_monitor_loop():
                             (_sl_sp - _entry_sp) / _entry_sp)
                         _price_to_sl_pct = (
                             (_sl_sp - current) / _entry_sp)
+                    _slp_sh  = _peak_shadow.get(key, {})
+                    _slp_mul = (
+                        0.30 if trade.get("tp1_hit")
+                        else 0.35 if not _slp_sh.get("be_armed", False)
+                        else 0.40
+                    )
                     if (_sl_distance_pct > 0 and
                             _price_to_sl_pct <=
-                            _sl_distance_pct * 0.40):
+                            _sl_distance_pct * _slp_mul):
                         print(
                             f"[SL_PROXIMITY] {sym} {direction}"
                             f" price={current}"
