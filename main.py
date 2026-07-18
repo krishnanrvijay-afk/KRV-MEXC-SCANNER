@@ -2251,14 +2251,12 @@ async def _exit_monitor_loop():
                     _ent  = trade.get("entry_price", 0) or 0
                     _cpnl = ((current - _ent) * _sz if not is_short
                              else (_ent - current) * _sz)
-                    _be_p = trade.get("be_price") or 0
-                    if not _be_p and _ent:
-                        _be_p = (round(_ent * 1.001, 6) if not is_short
-                                 else round(_ent * 0.999, 6))
-                    _be_crossed = ((current >= _be_p) if (not is_short and _be_p)
-                                   else (current <= _be_p) if (is_short and _be_p)
-                                   else False)
-                    if _be_crossed:
+                    # Arm at 0.05R profit (R-based) — fixes 1R arming barrier.
+                    # be_price ±0.1% hardcoded + dollar_risk 0.1% floor → arming
+                    # required 1.0R on all tight-stop EU pairs (ETH, SOL, BTC, etc.)
+                    # disabling PEAK_PROTECT/ARMED_REVERSAL/WALL_TP for every trade
+                    # peaking < 1R. Now arms at the PEAK_PROTECT activation threshold.
+                    if _dr_ac > 0 and (_cpnl / _dr_ac) >= 0.05:
                         _sh["be_armed"] = True
                     # -- Giveback streak: consecutive scan ticks of declining cpnl in R --
                     # Feeds PEAK_GIVEBACK exit. Reset when a new R-peak is set.
