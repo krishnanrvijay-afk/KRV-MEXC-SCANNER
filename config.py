@@ -78,6 +78,37 @@ BLOCKED_PAIR_SESSIONS: dict = {
     ("ZEC_USDT", "SHORT", "ASIA"): True,
     ("ZEC_USDT", "SHORT", "EU"):   True,
     ("ZEC_USDT", "SHORT", "US"):   True,
+    # TREND CANDIDATES — blocked in bounce scanner, reserved for trend scanner
+    # These pairs trend hard when bounce entries fail (avg adverse 1.0–1.5R, 4–11h duration)
+    # Transfer to MEXC trend scanner when built.
+    #
+    # NEAR_USDT SHORT all sessions: 10 losses avg -1.68R, -$1,018 total
+    # Two gap events: -3.62R (Jun 15 ASIA) and -3.30R (Jul 14 ASIA)
+    # NEAR_USDT LONG US unblocked: 75% WR +$267
+    ("NEAR_USDT",  "SHORT", "ASIA"): True,
+    ("NEAR_USDT",  "SHORT", "EU"):   True,
+    ("NEAR_USDT",  "SHORT", "US"):   True,
+    #
+    # XRP_USDT SHORT all sessions: 10 losses avg -1.35R, -$1,007 total
+    # ASIA SHORT holds adverse for avg 10.6h — pure trend continuation
+    # XRP_USDT LONG unblocked (some positive signal remains)
+    ("XRP_USDT",   "SHORT", "ASIA"): True,
+    ("XRP_USDT",   "SHORT", "EU"):   True,
+    ("XRP_USDT",   "SHORT", "US"):   True,
+    #
+    # DOGE_USDT LONG all sessions: 5 losses avg -1.14R, -$659 total
+    # 17% WR, avg losing duration 6.9h — DOGE LONGs in downtrend sit open and bleed
+    # DOGE_USDT SHORT unblocked: EU 100% WR +$255, ASIA 67% profitable
+    ("DOGE_USDT",  "LONG",  "ASIA"): True,
+    ("DOGE_USDT",  "LONG",  "EU"):   True,
+    ("DOGE_USDT",  "LONG",  "US"):   True,
+    #
+    # SOL_USDT LONG all sessions: 6 losses avg -1.06R, -$597 total
+    # 25% WR — bounce LONGs on SOL fail consistently; ASIA losses hold 5.7h avg
+    # SOL_USDT SHORT unblocked (limited data, no sustained loss pattern)
+    ("SOL_USDT",   "LONG",  "ASIA"): True,
+    ("SOL_USDT",   "LONG",  "EU"):   True,
+    ("SOL_USDT",   "LONG",  "US"):   True,
 }
 
 PLACE_EXCHANGE_SL      = True
