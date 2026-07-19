@@ -60,16 +60,8 @@ ADX_MIN_SHORT = 0   # data: SHORT ADX 0-14: 21 trades +$493. SHORTs profitable a
 
 SESSION_FILTER_ENABLED = True
 BLOCKED_PAIR_SESSIONS: dict = {
-    # HYPE_USDT LONG ASIA:
-    # archive 11 trades -$178.02
-    # live today 6 kills -$186.49
-    # avg MAE -0.330R
-    # HYPE_USDT LONG US: +$262.10
-    ("HYPE_USDT", "LONG", "ASIA"): True,
-    # NEW -- data: AVAX_USDT SHORT ASIA: 0% WR -$75 (3L exits into macro uptrend)
-    ("AVAX_USDT", "SHORT", "ASIA"): True,
-    # NEW -- data: SUI_USDT SHORT ASIA: 0% WR -$165 (back-to-back 3L exits)
-    ("SUI_USDT",  "SHORT", "ASIA"): True,
+    # Session-specific ASIA blocks removed Jul 2026 — BZ1/BZ2 auto-halt +
+    # dynamic gates now cover. Re-evaluate after 1 week.
     # R1 -- ADA_USDT all sessions LONG+SHORT: 6 trades 17% WR -$288.96 MEXC
     # Worst performing pair on MEXC; consistent losses across all sessions and directions
     ("ADA_USDT",  "LONG",  "ASIA"): True,
