@@ -34,7 +34,7 @@ J1H_LONG_MIN     = 0    # Bounds validator — guards negative J1H calculation e
 J1H_LONG_MAX     = 59   # No longer used as score gate — may be re-enabled via settings
 
 RSI15M_SHORT_MIN = 35   # enforced hard gate: blocks SHORTs when 15m RSI approaching oversold (< 35)
-RSI15M_LONG_MAX  = 40
+RSI15M_LONG_MAX  = 50   # enforced hard gate: blocks LONGs when 15m RSI recovered above neutral (>= 50)
 
 DEPTH_GATE_PCT   = 55
 
