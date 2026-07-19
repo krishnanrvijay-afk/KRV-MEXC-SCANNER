@@ -31,7 +31,7 @@ J15M_SHORT_CEILING  = 115   # Block SHORTs at extreme overbought (j15m > 115 = s
 J1H_SHORT_MIN    = 30   # enforced hard gate: blocks SHORTs where 1H is in deep oversold (< 30 = recovering market)
 J1H_SHORT_MAX    = 85   # Real trading ceiling — data: SHORT J1H 90-100 65.5% WR -$1,513
 J1H_LONG_MIN     = 0    # Bounds validator — guards negative J1H calculation edge cases. Not a trading gate.
-J1H_LONG_MAX     = 59   # No longer used as score gate — may be re-enabled via settings
+J1H_LONG_MAX     = 59   # Active gate: blocks LONGs when J1H ≥ 59. Adjustable via settings overlay.
 
 RSI15M_SHORT_MIN = 35   # enforced hard gate: blocks SHORTs when 15m RSI approaching oversold (< 35)
 RSI15M_LONG_MAX  = 50   # enforced hard gate: blocks LONGs when 15m RSI recovered above neutral (>= 50)
