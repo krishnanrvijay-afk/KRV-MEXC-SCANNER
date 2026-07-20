@@ -1950,24 +1950,24 @@ function _ovRulerHtml(d, dir) {
     }
 
     function _ovSessHtml(d, dir) {
-      const isL  = dir === 'LONG';
-      const halt = isL ? (d.session_halted_long || false) : (d.session_halted_short || false);
-      const pass = !halt;
-      const note = pass ? 'SESSION OPEN — no halt active' : '2 SLs this session — resumes next session open';
-      const dotCls = pass ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000' : 'background:#ff4646;color:#000';
-      return _ovGateRowHtml('SESSION', pass, note, _ovTrackHtml(pass ? 100 : 0, dotCls));
+      const isL    = dir !== 'SHORT';
+      const halt   = isL ? (d.session_halted_long || false) : (d.session_halted_short || false);
+      const pass   = !halt;
+      const txtCol = pass ? '#00e676' : '#ff5252';
+      const body   = `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${txtCol}">${pass ? 'SESSION OPEN — no halt active' : '2 SLs this session — resumes at next session open'}</div>`;
+      return _ovGateRowHtml('sess', 'SESSION', _ovPassIcon(pass), body);
     }
 
     function _ovCoolHtml(d, dir) {
-      const isL   = dir === 'LONG';
-      const stdCd = isL ? (d.cooldown_long  || 0) : (d.cooldown_short  || 0);
-      const lgCd  = isL ? (d.large_sl_cooldown_long_remaining  || 0) : (d.large_sl_cooldown_short_remaining || 0);
-      const maxCd = Math.max(stdCd, lgCd);
-      const pass  = maxCd === 0;
-      const cdStr = maxCd >= 60 ? Math.floor(maxCd/60)+'m '+(maxCd%60)+'s' : maxCd+'s';
-      const note  = pass ? 'CLEAR — no cooldown active' : 'COOLING DOWN — '+cdStr+' remaining';
-      const dotCls = pass ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000' : 'background:#ff4646;color:#000';
-      return _ovGateRowHtml('COOLDOWN', pass, note, _ovTrackHtml(pass ? 100 : 0, dotCls));
+      const isL    = dir !== 'SHORT';
+      const stdCd  = isL ? (d.cooldown_long  || 0) : (d.cooldown_short  || 0);
+      const lgCd   = isL ? (d.large_sl_cooldown_long_remaining  || 0) : (d.large_sl_cooldown_short_remaining || 0);
+      const maxCd  = Math.max(stdCd, lgCd);
+      const pass   = maxCd === 0;
+      const txtCol = pass ? '#00e676' : '#ff5252';
+      const cdStr  = maxCd >= 60 ? Math.floor(maxCd/60)+'m '+(maxCd%60)+'s' : maxCd+'s';
+      const body   = `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${txtCol}">${pass ? 'CLEAR — no cooldown active' : 'COOLING DOWN — '+cdStr+' remaining'}</div>`;
+      return _ovGateRowHtml('cool', 'COOLDOWN', _ovPassIcon(pass), body);
     }
 
     function _ovVerdictHtml(d, dir) {
@@ -1993,15 +1993,13 @@ function _ovRulerHtml(d, dir) {
       return `<div style="margin:4px 10px 0;padding:4px 8px;border-radius:3px;background:${bg};border:1px solid ${bdr};font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${col};letter-spacing:0.05em">${msg}</div>`;
     }
 
-    function _ovGateRowHtml(label, pass, noteHtml, trackHtml) {
-      const idPfx = label.toLowerCase().replace(/[^a-z]/g,'');
+    function _ovGateRowHtml(idPfx, name, passHtml, bodyHtml) {
       return `<div style="padding:10px 16px;border-bottom:1px solid #1a1a1a">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          ${_ovGateLabelHtml(label)}
-          <span id="pov-${idPfx}-pass">${_ovPassIcon(pass)}</span>
+          ${_ovGateLabelHtml(name)}
+          <span id="pov-${idPfx}-pass">${passHtml}</span>
         </div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${pass?'#00e676':'#ff5252'};margin-bottom:4px">${noteHtml}</div>
-        ${trackHtml}
+        ${bodyHtml}
       </div>`;
     }
 
@@ -2017,66 +2015,107 @@ function _ovRulerHtml(d, dir) {
     }
 
     function _ovJ15Html(d, dir) {
-      const j = Math.min(100, Math.max(0, d.j15m || 0));
-      const isL = dir === 'LONG';
-      const pass = isL ? j < 20 : j > 80;
-      const note = isL
-        ? `needs &lt;20 for LONG, currently ${j.toFixed(1)}`
-        : `needs &gt;80 for SHORT, currently ${j.toFixed(1)}`;
-      const dotCls = pass
-        ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000'
-        : (j > 75 ? 'background:#ff4646;box-shadow:0 0 6px #ff4646;color:#000' : 'background:#555;color:#fff');
-      return _ovGateRowHtml('J 15M', pass, note, _ovTrackHtml(j, dotCls));
+      const isL    = dir !== 'SHORT';
+      const v      = d.j15m || 0;
+      const j15mLG = (d.thresholds && d.thresholds.j15m_long)  || 20;
+      const j15mSG = (d.thresholds && d.thresholds.j15m_short) || 80;
+      const pass   = isL ? v < j15mLG : v > j15mSG;
+      const inZone = v <= j15mLG || v >= j15mSG;
+      const jCol   = inZone ? (v <= j15mLG ? '#00e676' : '#ff3d3d') : '#888';
+      const jGlow  = inZone ? `box-shadow:0 0 6px ${jCol};` : '';
+      const jLeft  = Math.min(99.5, Math.max(0.5, v)).toFixed(1);
+      const txtCol = pass ? '#00e676' : '#ff5252';
+      const body   = `
+        <div style="position:relative;height:28px;margin:6px 0 0">
+          <div style="position:absolute;left:0;width:${j15mLG}%;top:50%;transform:translateY(-50%);height:10px;background:rgba(0,255,106,0.2);border-radius:1px 0 0 1px;pointer-events:none"></div>
+          <div style="position:absolute;left:${j15mLG}%;width:${j15mSG-j15mLG}%;top:50%;transform:translateY(-50%);height:10px;background:#222;pointer-events:none"></div>
+          <div style="position:absolute;left:${j15mSG}%;width:${100-j15mSG}%;top:50%;transform:translateY(-50%);height:10px;background:rgba(255,61,61,0.2);border-radius:0 1px 1px 0;pointer-events:none"></div>
+          <div id="pov-j15-dot" style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${jLeft}%;width:12px;height:12px;border-radius:50%;background:${jCol};${jGlow}display:flex;align-items:center;justify-content:center;z-index:2">
+            <span style="font-size:7px;font-weight:700;color:#000;font-family:'JetBrains Mono',monospace;line-height:1">${v.toFixed(0)}</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#2a2a2a;font-family:'JetBrains Mono',monospace;margin:2px 0 4px">
+          <span>0</span><span>${j15mLG}</span><span>50</span><span>${j15mSG}</span><span>100</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${txtCol}">needs ${isL ? '&lt;'+j15mLG : '&gt;'+j15mSG} for ${isL ? 'LONG' : 'SHORT'}, currently <span id="pov-j15-val" style="color:${txtCol};font-weight:700">${v.toFixed(0)}</span></div>`;
+      return _ovGateRowHtml('j15', 'J 15M', _ovPassIcon(pass), body);
     }
 
     function _ovJ1hHtml(d, dir) {
-      const j = Math.min(100, Math.max(0, d.j1h || 0));
-      const isL = dir === 'LONG';
-      const pass = isL ? (j >= 0 && j < 59) : (j > 60 && j < 85);
-      const note = isL
-        ? `needs &lt;59 for LONG, currently ${j.toFixed(1)}`
-        : `needs &gt;60 and &lt;85 for SHORT, currently ${j.toFixed(1)}`;
-      const dotCls = pass
-        ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000'
-        : (j > 60 ? 'background:#ff4646;box-shadow:0 0 6px #ff4646;color:#000' : 'background:#555;color:#fff');
-      return _ovGateRowHtml('J 1H', pass, note, _ovTrackHtml(j, dotCls));
+      const isL    = dir !== 'SHORT';
+      const v      = d.j1h || 0;
+      const j1hLM  = (d.thresholds && d.thresholds.j1h_long_max)  || 59;
+      const j1hSM  = (d.thresholds && d.thresholds.j1h_short_max) || 85;
+      const pass   = isL ? (v >= 0 && v < j1hLM) : (v > 60 && v < j1hSM);
+      const inZone = v <= 20 || v >= 80;
+      const jCol   = inZone ? (v <= 20 ? '#00e676' : '#ff3d3d') : '#888';
+      const jGlow  = inZone ? `box-shadow:0 0 6px ${jCol};` : '';
+      const jLeft  = Math.min(99.5, Math.max(0.5, v)).toFixed(1);
+      const txtCol = pass ? '#00e676' : '#ff5252';
+      const body   = `
+        <div style="position:relative;height:28px;margin:6px 0 0">
+          <div style="position:absolute;left:0;width:20%;top:50%;transform:translateY(-50%);height:10px;background:rgba(0,255,106,0.2);border-radius:1px 0 0 1px;pointer-events:none"></div>
+          <div style="position:absolute;left:20%;width:60%;top:50%;transform:translateY(-50%);height:10px;background:#222;pointer-events:none"></div>
+          <div style="position:absolute;left:80%;width:20%;top:50%;transform:translateY(-50%);height:10px;background:rgba(255,61,61,0.2);border-radius:0 1px 1px 0;pointer-events:none"></div>
+          <div id="pov-j1h-dot" style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${jLeft}%;width:12px;height:12px;border-radius:50%;background:${jCol};${jGlow}display:flex;align-items:center;justify-content:center;z-index:2">
+            <span style="font-size:7px;font-weight:700;color:#000;font-family:'JetBrains Mono',monospace;line-height:1">${v.toFixed(0)}</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#2a2a2a;font-family:'JetBrains Mono',monospace;margin:2px 0 4px">
+          <span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${txtCol}">needs ${isL ? '&lt;'+j1hLM : '&gt;60 &amp;&amp; &lt;'+j1hSM} for ${isL ? 'LONG' : 'SHORT'}, currently <span id="pov-j1h-val" style="color:${txtCol};font-weight:700">${v.toFixed(0)}</span></div>`;
+      return _ovGateRowHtml('j1h', 'J 1H', _ovPassIcon(pass), body);
     }
 
     function _ovRsiHtml(d, dir) {
-      const isL  = dir !== 'SHORT';
-      const rsi  = +(d.rsi15m || 50);
-      const rsiLM = (d.thresholds && d.thresholds.rsi_long_max)  || 50;
-      const rsiSM = (d.thresholds && d.thresholds.rsi_short_min) || 35;
-      const pass = isL ? (rsi < rsiLM) : (rsi > rsiSM);
+      const isL    = dir !== 'SHORT';
+      const rsi    = +(d.rsi15m || 50);
+      const rsiLM  = (d.thresholds && d.thresholds.rsi_long_max)  || 50;
+      const rsiSM  = (d.thresholds && d.thresholds.rsi_short_min) || 35;
+      const pass   = isL ? (rsi < rsiLM) : (rsi > rsiSM);
+      const txtCol = pass ? '#00e676' : '#ff5252';
+      const desc   = isL
+        ? 'RSI 15m needs to be below ' + rsiLM + ' for LONG'
+        : 'RSI 15m needs to be above ' + rsiSM + ' for SHORT';
       const needle = Math.min(99, Math.max(1, rsi));
       const thrPct = isL ? rsiLM : rsiSM;
-      const note = pass
-        ? 'RSI in valid zone — ' + (isL ? 'below ' + rsiLM + ' (not yet recovered)' : 'above ' + rsiSM + ' (not approaching oversold)')
-        : (isL ? 'RSI ' + rsi.toFixed(1) + ' — needs <' + rsiLM + ' for LONG' : 'RSI ' + rsi.toFixed(1) + ' — needs >' + rsiSM + ' for SHORT');
-      const track = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#fff;margin-bottom:4px">Currently RSI = <span style="color:' + (pass ? '#00e676' : '#ff5252') + '">' + rsi.toFixed(1) + '</span></div>'
-        + '<div style="position:relative;height:16px;border-radius:4px;width:100%;margin:4px 0;background:linear-gradient(to right,#003d1f 0%,#00e676 ' + (rsiSM-0.5).toFixed(1) + '%,#1a1a1a ' + rsiSM + '%,#1a1a1a ' + (rsiLM-0.5).toFixed(1) + '%,#3a1a1a ' + rsiLM + '%,#3a1a1a 100%)">'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + thrPct + '%;width:2px;height:20px;background:#ffffff;opacity:0.4;border-radius:1px"></div>'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + needle.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:' + (pass ? '#00e676' : '#ff4646') + ';display:flex;align-items:center;justify-content:center;z-index:2"><span style="font-size:7px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">R</span></div>'
+      const body = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:' + txtCol + '">' + desc + '</div>'
+        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#fff;margin-top:4px">Currently RSI = <span id="pov-rsi-val" style="color:' + txtCol + '">' + rsi.toFixed(1) + '</span></div>'
+        + '<div style="position:relative;height:10px;border-radius:4px;width:100%;margin:8px 0 0;background:linear-gradient(to right,#003d1f 0%,#00e676 ' + (rsiSM-0.5).toFixed(1) + '%,#1a1a1a ' + rsiSM + '%,#1a1a1a ' + (rsiLM-0.5).toFixed(1) + '%,#3a1a1a ' + rsiLM + '%,#3a1a1a 100%)">'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + thrPct + '%;width:2px;height:16px;background:#ffffff;opacity:0.4;border-radius:1px"></div>'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + needle.toFixed(1) + '%;width:12px;height:12px;border-radius:50%;background:' + txtCol + ';display:flex;align-items:center;justify-content:center;z-index:2"><span style="font-size:6px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">R</span></div>'
         + '</div>'
-        + '<div style="display:flex;justify-content:space-between;margin-top:3px;font-size:7px;font-weight:700;color:#666"><span style="color:#00e676">0</span><span style="color:#00e676">' + rsiSM + '</span><span style="color:#ff5252">' + rsiLM + '</span><span style="color:#ff5252">100</span></div>';
-      return _ovGateRowHtml('RSI', pass, note, track);
+        + '<div style="display:flex;justify-content:space-between;margin-top:3px;font-size:7px;font-weight:700;color:#666"><span style="color:#00e676">0</span><span style="color:#00e676">' + rsiSM + '</span><span style="color:#ff5252">' + rsiLM + '</span><span style="color:#ff5252">100</span></div>'
+        + '<div id="pov-rsi-note" style="font-size:9px;color:' + (pass ? '#00e676' : '#ff5252') + ';font-family:\'JetBrains Mono\',monospace;margin-top:4px">' + (pass ? 'RSI in valid zone' : (isL ? 'RSI too high — not sufficiently oversold' : 'RSI too low — approaching oversold')) + '</div>';
+      return _ovGateRowHtml('rsi', 'RSI', _ovPassIcon(pass), body);
     }
 
     function _ovDepthHtml(d, dir) {
-      const isL  = dir === 'LONG';
-      const bid  = Math.min(100, Math.max(0, d.bid_pct || 0));
-      const ask  = Math.min(100, Math.max(0, d.ask_pct || 100 - bid));
-      const pct  = isL ? bid : ask;
-      const depG = (d.thresholds && d.thresholds.depth_gate) || 55;
-      const pass = pct >= depG;
-      const lbl  = isL ? 'BID' : 'ASK';
-      const note = pass
-        ? `${pct.toFixed(0)}% ${lbl} depth - needs &gt;=${depG}%`
-        : `needs &gt;=${depG}% ${lbl} depth, currently ${pct.toFixed(0)}%`;
-      const dotCls = pass
-        ? 'background:#00e676;box-shadow:0 0 6px #00e676;color:#000'
-        : 'background:#555;color:#fff';
-      return _ovGateRowHtml('BID/ASK DEPTH', pass, note, _ovTrackHtml(pct, dotCls));
+      const isL     = dir !== 'SHORT';
+      const v       = isL ? (d.bid_pct || 0) : (d.ask_pct || 0);
+      const depG    = (d.thresholds && d.thresholds.depth_gate) || 55;
+      const pass    = v >= depG;
+      const label   = isL ? 'bid' : 'ask';
+      const zoneCol = isL ? 'rgba(0,255,106,0.2)' : 'rgba(255,61,61,0.2)';
+      const dotCol  = pass ? (isL ? '#00e676' : '#ff5252') : '#888';
+      const dotGlow = pass ? `box-shadow:0 0 6px ${dotCol};` : '';
+      const dLeft   = Math.min(99.5, Math.max(0.5, v)).toFixed(1);
+      const txtCol  = pass ? '#00e676' : '#ff5252';
+      const body    = `
+        <div style="position:relative;height:28px;margin:6px 0 0">
+          <div style="position:absolute;left:0;width:${depG}%;top:50%;transform:translateY(-50%);height:10px;background:#222;border-radius:1px 0 0 1px;pointer-events:none"></div>
+          <div style="position:absolute;left:${depG}%;width:${100-depG}%;top:50%;transform:translateY(-50%);height:10px;background:${zoneCol};border-radius:0 1px 1px 0;pointer-events:none"></div>
+          <div style="position:absolute;left:${depG}%;top:50%;transform:translate(-50%,-50%);width:2px;height:10px;background:#ffffff;z-index:3;pointer-events:none"></div>
+          <div id="pov-depth-dot" style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${dLeft}%;width:12px;height:12px;border-radius:50%;background:${dotCol};${dotGlow}display:flex;align-items:center;justify-content:center;z-index:2">
+            <span style="font-size:7px;font-weight:700;color:#000;font-family:'JetBrains Mono',monospace;line-height:1">${v.toFixed(0)}</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#2a2a2a;font-family:'JetBrains Mono',monospace;margin:2px 0 4px">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${txtCol}">${depG}% ${label} depth needed, currently <span id="pov-depth-val" style="color:${txtCol};font-weight:700">${v.toFixed(0)}%</span></div>`;
+      return _ovGateRowHtml('depth', 'BID/ASK DEPTH', _ovPassIcon(pass), body);
     }
 
     function _ovScanConfHtml(d, dir) {
