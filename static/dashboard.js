@@ -1941,16 +1941,12 @@ function _ovRulerHtml(d, dir) {
 
     function _ovPassIcon(pass) {
       return pass
-        ? '<span style="color:#00e676;font-weight:700;font-size:13px;font-family:\'JetBrains Mono\',monospace">[OK]</span>'
-        : '<span style="color:#ff5252;font-weight:700;font-size:13px;font-family:\'JetBrains Mono\',monospace">[x]</span>';
+        ? '<span style="color:#00e676;font-size:14px;line-height:1">\u2705</span>'
+        : '<span style="color:#ff5252;font-size:14px;line-height:1">\u274c</span>';
     }
 
-    function _ovGateLabelHtml(label, pass) {
-      const col = pass ? '#00e676' : '#ff5252';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#fff;letter-spacing:0.05em">${label}</span>
-        ${_ovPassIcon(pass)}
-      </div>`;
+    function _ovGateLabelHtml(name) {
+      return `<span style="font-size:11px;font-weight:700;color:#ffffff;font-family:'JetBrains Mono',monospace;letter-spacing:0.08em">${name}</span>`;
     }
 
     function _ovSessHtml(d, dir) {
@@ -1998,9 +1994,13 @@ function _ovRulerHtml(d, dir) {
     }
 
     function _ovGateRowHtml(label, pass, noteHtml, trackHtml) {
-      return `<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;padding:6px 10px;margin-bottom:5px">
-        ${_ovGateLabelHtml(label, pass)}
-        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${pass?'#00e676':'#ff5252'};margin-bottom:3px">${noteHtml}</div>
+      const idPfx = label.toLowerCase().replace(/[^a-z]/g,'');
+      return `<div style="padding:10px 16px;border-bottom:1px solid #1a1a1a">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          ${_ovGateLabelHtml(label)}
+          <span id="pov-${idPfx}-pass">${_ovPassIcon(pass)}</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${pass?'#00e676':'#ff5252'};margin-bottom:4px">${noteHtml}</div>
         ${trackHtml}
       </div>`;
     }
