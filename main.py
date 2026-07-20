@@ -2972,8 +2972,16 @@ async def get_pair(symbol: str):
     rsi_gate_short = rsi15m > _rsi_short_min
     j1h_gate_long  = j1h < _j1h_long_max
     j1h_gate_short = j1h > 60 and j1h < _j1h_short_max
-    gate_long  = [j15m < _j15m_long_gate,  j1h_gate_long,  rsi_gate_long,  bid_pct >= _depth_gate]
-    gate_short = [j15m > _j15m_short_gate, j1h_gate_short, rsi_gate_short, ask_pct >= _depth_gate]
+    sess_gate_long  = f"{symbol}_LONG_{get_session_name()}"  not in _session_halted
+    sess_gate_short = f"{symbol}_SHORT_{get_session_name()}" not in _session_halted
+    _cd_long  = get_cooldown_remaining(symbol, "LONG")
+    _cd_short = get_cooldown_remaining(symbol, "SHORT")
+    _lgcd_long  = max(0, int(_large_sl_cooldowns.get(f"{symbol}LONG",  0) - time.time()))
+    _lgcd_short = max(0, int(_large_sl_cooldowns.get(f"{symbol}SHORT", 0) - time.time()))
+    cool_gate_long  = _cd_long  == 0 and _lgcd_long  == 0
+    cool_gate_short = _cd_short == 0 and _lgcd_short == 0
+    gate_long  = [j15m < _j15m_long_gate,  j1h_gate_long,  rsi_gate_long,  bid_pct >= _depth_gate,  sess_gate_long,  cool_gate_long]
+    gate_short = [j15m > _j15m_short_gate, j1h_gate_short, rsi_gate_short, ask_pct >= _depth_gate, sess_gate_short, cool_gate_short]
     score_long  = sum(gate_long)
     score_short = sum(gate_short)
     confluence_long  = j15m < 20 and j1h < 40
@@ -3075,6 +3083,8 @@ async def get_pair(symbol: str):
         "session_halted_short": f"{symbol}_SHORT_{get_session_name()}" in _session_halted,
         "large_sl_cooldown_long_remaining":  (lambda v: v or None)(max(0, int(_large_sl_cooldowns.get(f"{symbol}LONG",  0) - time.time()))),
         "large_sl_cooldown_short_remaining": (lambda v: v or None)(max(0, int(_large_sl_cooldowns.get(f"{symbol}SHORT", 0) - time.time()))),
+        "cooldown_long":                     _cd_long,
+        "cooldown_short":                    _cd_short,
         "session_halt_reason":  "2 SL hits this session - resumes at next session open" if (
             f"{symbol}_LONG_{get_session_name()}"  in _session_halted or
             f"{symbol}_SHORT_{get_session_name()}" in _session_halted
