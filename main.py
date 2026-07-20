@@ -2960,12 +2960,20 @@ async def get_pair(symbol: str):
     stoch_d_fast      = ps.get("stoch_d_fast",      50.0)
     stoch_k_prev_fast = ps.get("stoch_k_prev_fast", 50.0)
     stoch_d_prev_fast = ps.get("stoch_d_prev_fast", 50.0)
-    rsi_gate_long  = rsi15m < 50              # RSI15M_LONG_MAX
-    rsi_gate_short = rsi15m > 35              # RSI15M_SHORT_MIN
-    j1h_gate_long  = j1h < 59                # J1H_LONG_MAX
-    j1h_gate_short = j1h > 60 and j1h < 85   # J1H_SHORT_MIN + J1H_SHORT_MAX
-    gate_long  = [j15m < 20, j1h_gate_long,  rsi_gate_long,  bid_pct >= 55]
-    gate_short = [j15m > 80, j1h_gate_short, rsi_gate_short, ask_pct >= 55]
+    # Live thresholds — always match settings overlay in real time
+    _rsi_long_max    = _scanner_mod.RSI15M_LONG_MAX
+    _rsi_short_min   = _scanner_mod.RSI15M_SHORT_MIN
+    _j1h_long_max    = _scanner_mod.J1H_LONG_MAX
+    _j1h_short_max   = _scanner_mod.J1H_SHORT_MAX
+    _depth_gate      = _scanner_mod.DEPTH_GATE_PCT
+    _j15m_short_gate = _scanner_mod.J15M_SHORT_GATE
+    _j15m_long_gate  = _scanner_mod.J15M_LONG_GATE
+    rsi_gate_long  = rsi15m < _rsi_long_max
+    rsi_gate_short = rsi15m > _rsi_short_min
+    j1h_gate_long  = j1h < _j1h_long_max
+    j1h_gate_short = j1h > 60 and j1h < _j1h_short_max
+    gate_long  = [j15m < _j15m_long_gate,  j1h_gate_long,  rsi_gate_long,  bid_pct >= _depth_gate]
+    gate_short = [j15m > _j15m_short_gate, j1h_gate_short, rsi_gate_short, ask_pct >= _depth_gate]
     score_long  = sum(gate_long)
     score_short = sum(gate_short)
     confluence_long  = j15m < 20 and j1h < 40
@@ -3042,6 +3050,15 @@ async def get_pair(symbol: str):
         "stoch_d_prev_fast": round(stoch_d_prev_fast, 2),
         "gate_long":           gate_long,
         "gate_short":          gate_short,
+        "thresholds": {
+            "j15m_short":    _j15m_short_gate,
+            "j15m_long":     _j15m_long_gate,
+            "j1h_long_max":  _j1h_long_max,
+            "j1h_short_max": _j1h_short_max,
+            "rsi_short_min": _rsi_short_min,
+            "rsi_long_max":  _rsi_long_max,
+            "depth_gate":    _depth_gate,
+        },
         "score_long":          score_long,
         "score_short":         score_short,
         "alert":               alert,
