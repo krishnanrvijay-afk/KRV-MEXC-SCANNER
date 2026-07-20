@@ -1970,7 +1970,7 @@ function _ovRulerHtml(d, dir) {
       } else if (allPass) {
         msg = '[OK] ALL GATES PASS - ' + (rg ? rg.label.replace(/[^\x00-\x7F]/g,'') + ' confirmed' : 'regime exempt');
       } else {
-        const fails = ['J15M','J1H','STOCH K/D','DEPTH'].filter((_,i) => !gates[i]);
+        const fails = ['J15M','J1H','RSI','DEPTH'].filter((_,i) => !gates[i]);
         msg = '[x] NOT READY - ' + fails.join(', ');
       }
       return `<div style="margin:4px 10px 0;padding:4px 8px;border-radius:3px;background:${bg};border:1px solid ${bdr};font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${col};letter-spacing:0.05em">${msg}</div>`;
@@ -2021,87 +2021,22 @@ function _ovRulerHtml(d, dir) {
       return _ovGateRowHtml('J 1H', pass, note, _ovTrackHtml(j, dotCls));
     }
 
-    function _ovStochHtml(d, dir) {
-      const isL    = dir !== 'SHORT';
-      // PRIMARY: 8-3-3 (stoch_k_fast / stoch_d_fast) — must match scanner gate logic
-      const K      = Math.min(99, Math.max(0.5, d.stoch_k_fast || 0));
-      const D      = Math.min(99, Math.max(0.5, d.stoch_d_fast || 0));
-      const Kp     = +(d.stoch_k_prev_fast != null ? d.stoch_k_prev_fast : K);
-      const Dp     = +(d.stoch_d_prev_fast != null ? d.stoch_d_prev_fast : D);
-      const inZone    = isL ? K < 25 : (K > 75 && K <= 84);
-      const freshCross = isL ? (K > D && Kp <= Dp) : (K < D && Kp >= Dp);
-      const pass      = inZone && freshCross;
-      const dZone     = isL ? D < 25 : D > 75;
-      const kColHex   = inZone ? (isL ? '#00e676' : '#ff4646') : '#888';
-      const dColHex   = dZone  ? (isL ? '#00e676' : '#ff4646') : '#666';
-      const kGlow     = inZone ? 'box-shadow:0 0 8px ' + kColHex + ',0 0 16px rgba(0,230,118,0.4);' : '';
-      let note;
-      if (pass) {
-        note = 'K ' + (isL ? 'above' : 'below') + ' D in zone — fresh cross confirmed';
-      } else if (isL) {
-        if (inZone && !freshCross) {
-          note = 'K in zone but cross is stale — waiting for K to reset above D then re-cross';
-        } else {
-          note = 'K needs to drop below 25 and cross above D for LONG. Currently K=' + K.toFixed(1) + ' D=' + D.toFixed(1);
-        }
-      } else {
-        if (K > 84) {
-          note = 'K above 84 ceiling — blocked. Currently K=' + K.toFixed(1) + ' D=' + D.toFixed(1);
-        } else if (inZone && !freshCross) {
-          note = 'K in zone but cross is stale — waiting for K to reset below D then re-cross';
-        } else {
-          note = 'K needs to rise above 75 (≤84) and cross below D for SHORT. Currently K=' + K.toFixed(1) + ' D=' + D.toFixed(1);
-        }
-      }
-      const gradGreen = '#003d1f 0%,#003d1f 4.8%,#0a0a0a 4.8%,#0a0a0a 5%,'
-        + '#005a2d 5%,#005a2d 9.8%,#0a0a0a 9.8%,#0a0a0a 10%,'
-        + '#007a3d 10%,#007a3d 14.8%,#0a0a0a 14.8%,#0a0a0a 15%,'
-        + '#009e4e 15%,#009e4e 19.8%,#0a0a0a 19.8%,#0a0a0a 20%,'
-        + '#00c261 20%,#00c261 24.8%,#0a0a0a 24.8%,#0a0a0a 25%,'
-        + '#00e676 25%';
-      const gradGrey = '#1a1a1a 25%,#1a1a1a 75%';
-      const gradRed  = '#ff4646 75%,#ff4646 79.8%,#0a0a0a 79.8%,#0a0a0a 80%,'
-        + '#d93a3a 80%,#d93a3a 84.8%,#0a0a0a 84.8%,#0a0a0a 85%,'
-        + '#b02f2f 85%,#b02f2f 89.8%,#0a0a0a 89.8%,#0a0a0a 90%,'
-        + '#882424 90%,#882424 94.8%,#0a0a0a 94.8%,#0a0a0a 95%,'
-        + '#601a1a 95%,#601a1a 99.8%,#0a0a0a 99.8%,#0a0a0a 100%,'
-        + '#3a0f0f 100%';
-      const ticksHtml = '<div style="display:flex;margin-top:3px;font-size:7px;font-weight:700;">'
-        + '<span style="width:5%;text-align:center;color:#00e676">0</span>'
-        + '<span style="width:5%;text-align:center;color:#00e676">5</span>'
-        + '<span style="width:5%;text-align:center;color:#00e676">10</span>'
-        + '<span style="width:5%;text-align:center;color:#00e676">15</span>'
-        + '<span style="width:5%;text-align:center;color:#00e676">20</span>'
-        + '<span style="width:5%;text-align:center;color:#00e676">25</span>'
-        + '<span style="flex:1;text-align:center;color:#444">50</span>'
-        + '<span style="width:5%;text-align:center;color:#ff4646">75</span>'
-        + '<span style="width:5%;text-align:center;color:#ff4646">80</span>'
-        + '<span style="width:5%;text-align:center;color:#ff4646">85</span>'
-        + '<span style="width:5%;text-align:center;color:#ff4646">90</span>'
-        + '<span style="width:5%;text-align:center;color:#ff4646">95</span>'
-        + '<span style="width:5%;text-align:center;color:#ff4646">100</span>'
-        + '</div>';
-      const track = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#ffffff;margin-bottom:4px">Currently K=' + K.toFixed(1) + ' D=' + D.toFixed(1) + '</div>'
-        + '<div style="font-size:10px;color:#666;margin-bottom:6px">PREV K=' + Kp.toFixed(1) + ' D=' + Dp.toFixed(1) + ' — FRESH: ' + (freshCross ? '<span style="color:#00e676">✓</span>' : '<span style="color:#ff5252">✗ waiting for new cross</span>') + '</div>'
-        + (!isL ? '<div style="font-size:10px;color:' + (K <= 84 ? '#00e676' : '#ff5252') + ';margin-bottom:6px">CEILING: K=' + K.toFixed(1) + (K <= 84 ? ' ≤ 84 ✓' : ' > 84 BLOCKED') + '</div>' : '')
-        + '<div style="position:relative;height:16px;border-radius:4px;width:100%;margin:4px 0;background:linear-gradient(to right,' + gradGreen + ',' + gradGrey + ',' + gradRed + ')">'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + D.toFixed(1) + '%;width:12px;height:12px;border-radius:2px;border:1.5px solid ' + dColHex + ';background:#000;display:flex;align-items:center;justify-content:center;z-index:1">'
-        + '<span style="font-size:7px;font-weight:700;color:' + dColHex + ';font-family:\'JetBrains Mono\',monospace;line-height:1">D</span>'
+    function _ovRsiHtml(d, dir) {
+      const isL  = dir !== 'SHORT';
+      const rsi  = +(d.rsi15m || 50);
+      const pass = isL ? (rsi < 50) : (rsi > 35);
+      const needle = Math.min(99, Math.max(1, rsi));
+      const thrPct = isL ? 50 : 35;
+      const note = pass
+        ? 'RSI in valid zone — ' + (isL ? 'below 50 (not yet recovered)' : 'above 35 (not approaching oversold)')
+        : (isL ? 'RSI ' + rsi.toFixed(1) + ' — needs <50 for LONG' : 'RSI ' + rsi.toFixed(1) + ' — needs >35 for SHORT');
+      const track = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;color:#fff;margin-bottom:4px">Currently RSI = <span style="color:' + (pass ? '#00e676' : '#ff5252') + '">' + rsi.toFixed(1) + '</span></div>'
+        + '<div style="position:relative;height:16px;border-radius:4px;width:100%;margin:4px 0;background:linear-gradient(to right,#003d1f 0%,#00e676 34.5%,#1a1a1a 35%,#1a1a1a 49.5%,#3a1a1a 50%,#3a1a1a 100%)">'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + thrPct + '%;width:2px;height:20px;background:#ffffff;opacity:0.4;border-radius:1px"></div>'
+        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + needle.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:' + (pass ? '#00e676' : '#ff4646') + ';display:flex;align-items:center;justify-content:center;z-index:2"><span style="font-size:7px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">R</span></div>'
         + '</div>'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + K.toFixed(1) + '%;width:14px;height:14px;border-radius:50%;background:' + kColHex + ';' + kGlow + 'display:flex;align-items:center;justify-content:center;z-index:2">'
-        + '<span style="font-size:7px;font-weight:700;color:#000;font-family:\'JetBrains Mono\',monospace;line-height:1">K</span>'
-        + '</div>'
-        + '</div>'
-        + ticksHtml
-        + '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e1e1e;opacity:0.45">'
-        + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:7px;font-weight:700;background:#111;border:1px solid #2a2a2a;color:#666;padding:1px 5px;border-radius:3px">14,3,3 REF</span>'
-        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;font-weight:700;color:#555;margin-top:4px">K=' + (d.stoch_k||0).toFixed(1) + ' D=' + (d.stoch_d||0).toFixed(1) + '</div>'
-        + '<div style="position:relative;height:6px;border-radius:3px;width:100%;margin:6px 0 0;background:#1a1a1a">'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + Math.min(99,Math.max(0.5,d.stoch_d||0)).toFixed(1) + '%;width:8px;height:8px;border-radius:2px;border:1px solid #444;background:#000;z-index:1"></div>'
-        + '<div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:' + Math.min(99,Math.max(0.5,d.stoch_k||0)).toFixed(1) + '%;width:10px;height:10px;border-radius:50%;background:#555"></div>'
-        + '</div>'
-        + '</div>';
-      return _ovGateRowHtml('STOCH K/D (8-3-3)', pass, note, track);
+        + '<div style="display:flex;justify-content:space-between;margin-top:3px;font-size:7px;font-weight:700;color:#666"><span style="color:#00e676">0</span><span style="color:#00e676">35</span><span style="color:#ff5252">50</span><span style="color:#ff5252">100</span></div>';
+      return _ovGateRowHtml('RSI', pass, note, track);
     }
 
     function _ovDepthHtml(d, dir) {
@@ -2285,7 +2220,7 @@ function _ovRender(pn, d) {
       <div class="pov-gates-sec" id="pov-gates">
           ${_ovJ15Html(d, dir)}
           ${_ovJ1hHtml(d, dir)}
-          ${_ovStochHtml(d, dir)}
+          ${_ovRsiHtml(d, dir)}
           ${_ovDepthHtml(d, dir)}
           ${_ovGates(d, dir).filter(Boolean).length >= 3 ? _ovScanConfHtml(d, dir) : ''}
         </div>
