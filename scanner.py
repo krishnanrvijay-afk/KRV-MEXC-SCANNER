@@ -17,6 +17,7 @@ from config import (
     SE_J1H_DECAY_PTS,
     BLOCKED_PAIR_SESSIONS,
     SESSION_FILTER_ENABLED,
+    CONVERGENCE_GATE_ENABLED,
 )
 
 # ── Configurable via settings overlay (main.py sets these at runtime) ──────
@@ -75,6 +76,8 @@ _stale_counts: dict[str, int]  = {}     # per-symbol consecutive no-price scan c
 _candle_cache: dict             = {}     # "SYMBOL_tf" -> (candles, expires_at_epoch)
 _btc_j1h: float = 50.0
 _btc_j1h_history: list = []  # Tracks last 12 BTC J1H values — ~10-15 minutes of macro trend
+_conv_gate_short: bool = False   # set by main.py from local sentinel; True = 55%+ pairs overbought
+_conv_gate_long:  bool = False   # set by main.py from local sentinel; True = 55%+ pairs oversold
 BTC_CORRELATION: dict = {
     "ETH": 0.94, "SOL": 0.86, "XRP": 0.84, "DOGE": 0.87,
     "LINK": 0.82, "AVAX": 0.80, "SUI": 0.82, "NEAR": 0.78,
@@ -561,6 +564,8 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
             _regime_block_short = _regime_block_long = False
             if _btc_j1h > 80.0:
                 _btc_regime_context = "LONG_BLOCKED"
+                if _pair_corr >= 0.70:  # corr-gated, symmetric with SHORT_BLOCKED
+                    _regime_block_long = True
             elif _btc_j1h < 20.0:
                 _btc_regime_context = "SHORT_BLOCKED"
                 if _pair_corr >= 0.70:  # only block HIGH-CORR pairs; low-corr bypass
@@ -624,6 +629,14 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                 _regime_block_long  = True
             if _fleet_halt_short:
                 _regime_block_short = True
+            # R4: local-venue convergence gate (CONVERGENCE_GATE_ENABLED in config)
+            # Blocks opposite direction when 55%+ of pairs have aligned breadth.
+            # _conv_gate_short/long are updated by main.py after each sentinel call.
+            if CONVERGENCE_GATE_ENABLED:
+                if _conv_gate_short:  # 55%+ pairs overbought -> block LONGs
+                    _regime_block_long  = True
+                if _conv_gate_long:   # 55%+ pairs oversold  -> block SHORTs
+                    _regime_block_short = True
 
             # Accumulate pair state -- replaces scan_pair_state() second sweep
             _s_raw = check_bounce_short(j15m, ask_pct, j5m)
