@@ -210,3 +210,7 @@ SE_J1H_DECAY_PTS: float = 10.0
 # Tighter than the floor because
 # time without recovery is itself
 # a signal.
+CONVERGENCE_GATE_ENABLED: bool = True
+# When True, each scanner blocks the opposite direction when local sentinel
+# breadth crosses 55% (fleet_convergence_short -> block LONGs; fleet_convergence_long -> block SHORTs).
+# Set to False to disable without redeploy via config reload.
