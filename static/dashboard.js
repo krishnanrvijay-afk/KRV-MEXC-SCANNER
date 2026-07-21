@@ -1970,6 +1970,25 @@ function _ovRulerHtml(d, dir) {
       return _ovGateRowHtml('cool', 'COOLDOWN', _ovPassIcon(pass), body);
     }
 
+    function _ovSessCoolHtml(d, dir) {
+      const isL    = dir !== 'SHORT';
+      const halt   = isL ? (d.session_halted_long || false) : (d.session_halted_short || false);
+      const sessOk = !halt;
+      const stdCd  = isL ? (d.cooldown_long || 0) : (d.cooldown_short || 0);
+      const lgCd   = isL ? (d.large_sl_cooldown_long_remaining || 0) : (d.large_sl_cooldown_short_remaining || 0);
+      const maxCd  = Math.max(stdCd, lgCd);
+      const cdOk   = maxCd === 0;
+      const bothOk = sessOk && cdOk;
+      const cdStr  = maxCd >= 60 ? Math.floor(maxCd/60)+'m '+(maxCd%60)+'s' : maxCd+'s';
+      const sCol   = sessOk ? '#00e676' : '#ff5252';
+      const cCol   = cdOk   ? '#00e676' : '#ff5252';
+      const body   = `<div style="display:flex;gap:16px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700">
+        <span><span style="color:#888;font-size:9px">SESS </span><span style="color:${sCol}">${sessOk ? 'OPEN' : 'HALTED'}</span></span>
+        <span><span style="color:#888;font-size:9px">CD </span><span style="color:${cCol}">${cdOk ? 'CLEAR' : cdStr}</span></span>
+      </div>`;
+      return _ovGateRowHtml('sesscool', 'SESS · CD', _ovPassIcon(bothOk), body);
+    }
+
     function _ovVerdictHtml(d, dir) {
       const gates = _ovGates(d, dir);
       const score = gates.filter(Boolean).length;
@@ -2012,6 +2031,33 @@ function _ovRulerHtml(d, dir) {
         <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${clamped}%;width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;z-index:2;${cls}">${Math.round(pct)}</div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:700;color:#fff;opacity:0.4"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>`;
+    }
+
+    function _ovJ5mHtml(d, dir) {
+      const isL    = dir !== 'SHORT';
+      const v      = (d.j5m_live != null) ? +d.j5m_live : null;
+      const thr    = isL ? +(d.j5m_long_max || 20) : +(d.j5m_short_min || 88);
+      const pass   = (v != null) ? (isL ? v < thr : v > thr) : false;
+      const vStr   = (v != null) ? v.toFixed(1) : '—';
+      const jLeft  = (v != null) ? Math.min(99.5, Math.max(0.5, v)).toFixed(1) : '50';
+      const jCol   = (v == null) ? '#555' : pass ? (isL ? '#00e676' : '#ff3d3d') : '#888';
+      const jGlow  = pass ? `box-shadow:0 0 6px ${jCol};` : '';
+      const txtCol = pass ? '#00e676' : '#ff5252';
+      const needTxt = isL ? `&lt;${thr}` : `&gt;${thr}`;
+      const body   = `
+        <div style="position:relative;height:28px;margin:6px 0 0">
+          <div style="position:absolute;left:0;width:20%;top:50%;transform:translateY(-50%);height:10px;background:rgba(0,255,106,0.2);border-radius:1px 0 0 1px;pointer-events:none"></div>
+          <div style="position:absolute;left:20%;width:60%;top:50%;transform:translateY(-50%);height:10px;background:#222;pointer-events:none"></div>
+          <div style="position:absolute;left:80%;width:20%;top:50%;transform:translateY(-50%);height:10px;background:rgba(255,61,61,0.2);border-radius:0 1px 1px 0;pointer-events:none"></div>
+          <div id="pov-j5m-dot" style="position:absolute;top:50%;transform:translate(-50%,-50%);left:${jLeft}%;width:12px;height:12px;border-radius:50%;background:${jCol};${jGlow}display:flex;align-items:center;justify-content:center;z-index:2">
+            <span style="font-size:6px;font-weight:700;color:#000;font-family:'JetBrains Mono',monospace;line-height:1">${vStr}</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#2a2a2a;font-family:'JetBrains Mono',monospace;margin:2px 0 4px">
+          <span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${txtCol}">needs ${needTxt} for ${isL ? 'LONG' : 'SHORT'}, currently <span id="pov-j5m-val" style="color:${txtCol};font-weight:700">${vStr}</span></div>`;
+      return _ovGateRowHtml('j5m', 'J 5M', _ovPassIcon(v != null ? pass : false), body);
     }
 
     function _ovJ15Html(d, dir) {
@@ -2095,7 +2141,7 @@ function _ovRulerHtml(d, dir) {
     function _ovDepthHtml(d, dir) {
       const isL     = dir !== 'SHORT';
       const v       = isL ? (d.bid_pct || 0) : (d.ask_pct || 0);
-      const depG    = (d.thresholds && d.thresholds.depth_gate) || 55;
+      const depG    = isL ? ((d.thresholds && d.thresholds.depth_long_min)  || (d.depth_long_min  || 50)) : ((d.thresholds && d.thresholds.depth_short_min) || (d.depth_short_min || 45));
       const pass    = v >= depG;
       const label   = isL ? 'bid' : 'ask';
       const zoneCol = isL ? 'rgba(0,255,106,0.2)' : 'rgba(255,61,61,0.2)';
@@ -2282,12 +2328,12 @@ function _ovRender(pn, d) {
       </div>
       <div id="pov-ruler" class="pov-ruler-wrap">${rulerHtml}</div>
       <div class="pov-gates-sec" id="pov-gates">
+          ${_ovJ5mHtml(d, dir)}
           ${_ovJ15Html(d, dir)}
           ${_ovJ1hHtml(d, dir)}
           ${_ovRsiHtml(d, dir)}
           ${_ovDepthHtml(d, dir)}
-          ${_ovSessHtml(d, dir)}
-          ${_ovCoolHtml(d, dir)}
+          ${_ovSessCoolHtml(d, dir)}
           ${_ovGates(d, dir).filter(Boolean).length >= 3 ? _ovScanConfHtml(d, dir) : ''}
         </div>
       <div class="pov-adx-row">
@@ -2874,6 +2920,14 @@ async function cfgFetch() {
     if (elMC) elMC.value = d.margin_hard_cap ?? 25000;
     var elTA = document.getElementById('cfg-trail-atr');
     if (elTA) elTA.value = d.trail_atr_multiplier ?? 0.5;
+    var elJ5S = document.getElementById('cfg-j5m-os');
+    if (elJ5S) elJ5S.value = d.j5m_short_min ?? 88;
+    var elJ5L = document.getElementById('cfg-j5m-ob');
+    if (elJ5L) elJ5L.value = d.j5m_long_max ?? 20;
+    var elDS = document.getElementById('cfg-depth-short');
+    if (elDS) elDS.value = d.depth_short_min ?? 45;
+    var elDL = document.getElementById('cfg-depth-long');
+    if (elDL) elDL.value = d.depth_long_min ?? 50;
     cfgUpdatePaperLabel();
     cfgUpdateTgLabel();
     cfgFetchIdentity();
@@ -2959,6 +3013,10 @@ async function cfgSave() {
     leverage_low: Number((document.getElementById('cfg-lev-low')||{}).value||5),
     margin_hard_cap: Number((document.getElementById('cfg-margin-cap')||{}).value||25000),
     trail_atr_multiplier: Number((document.getElementById('cfg-trail-atr')||{}).value||0.5),
+    j5m_short_min: Number((document.getElementById('cfg-j5m-os')||{}).value||88),
+    j5m_long_max: Number((document.getElementById('cfg-j5m-ob')||{}).value||20),
+    depth_short_min: Number((document.getElementById('cfg-depth-short')||{}).value||45),
+    depth_long_min: Number((document.getElementById('cfg-depth-long')||{}).value||50),
   };
   try {
     var r = await fetch('/api/settings',
