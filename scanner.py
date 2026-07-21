@@ -69,6 +69,9 @@ _flash_closed: set = set()                                      # trade keys alr
 _btc_flash_tg_pending = [False]                                 # set True when flash arms; cleared in main.py after TG sent
 _cooldowns:   dict[str, float] = {}   # keyed "BTCSHORT" / "BTCLONG" -> expiry ts
 _pair_cooldowns: dict           = {}   # keyed symbol -> expiry ts
+_bypass_cooldowns: dict[str, float] = {}  # keyed "SYMBOLLONG" -> expiry ts (bypass re-entry timer)
+BYPASS_COOLDOWN_SECONDS: int = 1800        # 30 min re-entry timer after any bypass LONG fires
+BYPASS_J15M_MAX: float = 20.0              # J15M must be < this for bypass LONGs (tighter gate during BTC LONG_BLOCKED)
 _scan_count:  int              = 0
 _fleet_halt:  bool             = False  # set by fleet-scorecard halt API via Supabase
 _stale_prices: set[str]        = set()  # symbols with 5+ consecutive missing prices
@@ -773,6 +776,25 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                             "MEXC", symbol, "BTC_REGIME_CORR_BLOCK", direction,
                             f"btc_j1h={_btc_j1h:.1f} LONG_BLOCKED corr={_pair_corr:.2f}>=0.70 j1h={j1h:.1f}>={J1H_LONG_MAX}"))
                         continue
+                    # ── Bypass-specific gates (only when LONG enters under BTC LONG_BLOCKED) ──
+                    if (direction == "LONG" and
+                            _btc_regime_context == "LONG_BLOCKED" and
+                            _pair_corr >= 0.70 and
+                            j1h < J1H_LONG_MAX):
+                        # Gate A: J15M must be deeply oversold during bypass
+                        if j15m >= BYPASS_J15M_MAX:
+                            asyncio.create_task(_log_gate(
+                                "MEXC", symbol, "BYPASS_J15M_FAIL", direction,
+                                f"bypass j15m={j15m:.1f} need<{BYPASS_J15M_MAX:.0f} (BTC LONG_BLOCKED)"))
+                            continue
+                        # Gate B: 30-min re-entry timer per pair after any bypass LONG fires
+                        _bypass_cd_key = f"{symbol}LONG"
+                        _bypass_cd_rem = int(_bypass_cooldowns.get(_bypass_cd_key, 0) - time.time())
+                        if _bypass_cd_rem > 0:
+                            asyncio.create_task(_log_gate(
+                                "MEXC", symbol, "BYPASS_REENTRY_CD", direction,
+                                f"bypass cooldown {_bypass_cd_rem}s remaining ({BYPASS_COOLDOWN_SECONDS//60}min timer)"))
+                            continue
                     # J1H ceiling gate (enforced) — blocks LONGs above valid bounce zone
                     if j1h >= J1H_LONG_MAX:
                         asyncio.create_task(_log_gate(
@@ -941,6 +963,13 @@ async def run_full_scan(client, market_health: Optional[dict] = None, open_trade
                         f"skipped — {_cofire_n} {direction} signals "
                         f"already queued this scan")
                     continue
+                # Stamp bypass re-entry cooldown when a bypass LONG signal fires
+                if (direction == "LONG" and
+                        _btc_regime_context == "LONG_BLOCKED" and
+                        _pair_corr >= 0.70 and
+                        j1h < J1H_LONG_MAX):
+                    _bypass_cooldowns[f"{symbol}LONG"] = time.time() + BYPASS_COOLDOWN_SECONDS
+                    alert["bypass_entry"] = True
                 new_alerts.append(alert)
                 log.info(
                     f"[SIGNAL] {symbol} {direction}"
