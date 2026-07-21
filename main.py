@@ -236,6 +236,10 @@ class AppState:
                 "rsi_short_min": _scanner_mod.RSI15M_SHORT_MIN,
                 "rsi_long_max":  _scanner_mod.RSI15M_LONG_MAX,
                 "depth_gate":    _scanner_mod.DEPTH_GATE_PCT,
+                "depth_short_min": _scanner_mod.DEPTH_SHORT_MIN,
+                "depth_long_min":  _scanner_mod.DEPTH_LONG_MIN,
+                "j5m_short_min":   _scanner_mod.J5M_SHORT_MIN,
+                "j5m_long_max":    _scanner_mod.J5M_LONG_MAX,
             },
             "session":        get_session_name(),
             "alerts":         self.alerts,
@@ -485,6 +489,14 @@ def _load_state():
                 .KILL_PCT_FLOOR = \
                 float(data[
                     "kill_pct_floor"])
+        if data.get("j5m_short_min") is not None:
+            _scanner_mod.J5M_SHORT_MIN = float(data["j5m_short_min"])
+        if data.get("j5m_long_max") is not None:
+            _scanner_mod.J5M_LONG_MAX = float(data["j5m_long_max"])
+        if data.get("depth_short_min") is not None:
+            _scanner_mod.DEPTH_SHORT_MIN = float(data["depth_short_min"])
+        if data.get("depth_long_min") is not None:
+            _scanner_mod.DEPTH_LONG_MIN = float(data["depth_long_min"])
         if data.get("leverage") is not None:
             _scanner_mod.LEVERAGE = int(data["leverage"])
         if data.get("margin_hard_cap") is not None:
@@ -3298,8 +3310,10 @@ async def live_brief(symbol: str, direction: str):
 
     ps        = next((p for p in app_state.pair_states if p.get("symbol") == symbol), None)
     depth_pct = None
+    j5m_live  = None
     if ps:
         depth_pct = ps.get("bid_pct") if direction == "LONG" else ps.get("ask_pct")
+        j5m_live  = ps.get("j5m")
 
     btc_j1h = _scanner_mod._btc_j1h
     if   btc_j1h > 80.0:              btc_regime = "LONG_BLOCKED"
@@ -3313,6 +3327,11 @@ async def live_brief(symbol: str, direction: str):
         "depth_pct":                           depth_pct,
         "btc_regime":                          btc_regime,
         "standard_cooldown_remaining_seconds": std_cd,
+        "j5m_live":                            j5m_live,
+        "j5m_short_min":                       _scanner_mod.J5M_SHORT_MIN,
+        "j5m_long_max":                        _scanner_mod.J5M_LONG_MAX,
+        "depth_short_min":                     _scanner_mod.DEPTH_SHORT_MIN,
+        "depth_long_min":                      _scanner_mod.DEPTH_LONG_MIN,
     }
 
     daily_out = {
@@ -3501,6 +3520,14 @@ async def get_settings():
             MARGIN_HARD_CAP,
         "trail_atr_multiplier":
             TRAIL_ATR_MULTIPLIER,
+        "j5m_short_min":
+            _scanner_mod.J5M_SHORT_MIN,
+        "j5m_long_max":
+            _scanner_mod.J5M_LONG_MAX,
+        "depth_short_min":
+            _scanner_mod.DEPTH_SHORT_MIN,
+        "depth_long_min":
+            _scanner_mod.DEPTH_LONG_MIN,
     }
 
 
@@ -3578,6 +3605,14 @@ async def post_settings(request: Request):
     if "trail_atr_multiplier" in body:
         TRAIL_ATR_MULTIPLIER = float(
             body["trail_atr_multiplier"])
+    if "j5m_short_min" in body:
+        _scanner_mod.J5M_SHORT_MIN = float(body["j5m_short_min"])
+    if "j5m_long_max" in body:
+        _scanner_mod.J5M_LONG_MAX = float(body["j5m_long_max"])
+    if "depth_short_min" in body:
+        _scanner_mod.DEPTH_SHORT_MIN = float(body["depth_short_min"])
+    if "depth_long_min" in body:
+        _scanner_mod.DEPTH_LONG_MIN = float(body["depth_long_min"])
 
     # Persist ALL settings to Supabase
     # NOTE: columns require migration if not yet in schema.
@@ -3627,6 +3662,14 @@ async def post_settings(request: Request):
                     MARGIN_HARD_CAP,
                 "trail_atr_multiplier":
                     TRAIL_ATR_MULTIPLIER,
+                "j5m_short_min":
+                    _scanner_mod.J5M_SHORT_MIN,
+                "j5m_long_max":
+                    _scanner_mod.J5M_LONG_MAX,
+                "depth_short_min":
+                    _scanner_mod.DEPTH_SHORT_MIN,
+                "depth_long_min":
+                    _scanner_mod.DEPTH_LONG_MIN,
             }
             _settings_payload["id"] = 1
             _sb.table("mexc_scanner_state")\
