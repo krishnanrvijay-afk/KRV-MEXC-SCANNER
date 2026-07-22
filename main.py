@@ -2208,14 +2208,22 @@ async def _exit_monitor_loop():
 
                 # -- ARMED_REVERSAL (pre-SLP guard): backstop for fast reversals ----
                 # WALL_TP/SE run first above to protect profit while positive;
-                # AR catches reversals after arming. Hysteresis: requires cpnl < -0.05R
-                # before firing to avoid premature exits on spread noise at entry.
+                # AR catches reversals after arming. Peak-scaled threshold:
+                #   peak_r >= 0.10R -> fire at cpnl < +0.02R (protect high-MFE trades)
+                #   peak_r <  0.10R -> fire at cpnl < -0.05R (original hysteresis)
+                # Requires 2 consecutive scan ticks below threshold to avoid
+                # false-triggering on intracandle dips (ar_below_thresh_ticks).
                 # _ar_pre is already defined in the profit-guards block above.
-                _ar_dr = trade.get("dollar_risk", 0) or 0
+                _ar_dr     = trade.get("dollar_risk", 0) or 0
+                _ar_peak_r = _ar_pre.get("peak_pnl_r", 0.0)
+                _ar_thresh = 0.02 if _ar_peak_r >= 0.10 else -0.05
                 if (_ar_pre.get("be_armed")
                         and _ar_dr > 0
-                        and (_cpnl / _ar_dr) < -0.05):
+                        and _ar_pre.get("ar_below_thresh_ticks", 0) >= 1
+                        and (_cpnl / _ar_dr) < _ar_thresh):
                     print(f"[ARMED_REVERSAL] MEXC {sym} {direction}"
+                          f" peak_r={_ar_peak_r:.3f}R thresh={_ar_thresh:.2f}R"
+                          f" ticks={_ar_pre.get('ar_below_thresh_ticks', 0)}"
                           f" peak={_ar_pre.get('peak_pnl_usd', 0):.2f}"
                           f" cpnl={_cpnl:.2f}"
                           f" cpnl_r={_cpnl/_ar_dr:.3f}R")
@@ -2295,6 +2303,7 @@ async def _exit_monitor_loop():
                         "peak_reached_at": None,
                         "be_armed":        False,
                         "giveback_streak": 0,
+                        "ar_below_thresh_ticks": 0,
                         "last_cpnl_r":     None,
                         "d20_at": None, "d20_pnl": None, "d20_phase": None,
                         "d30_at": None, "d30_pnl": None, "d30_phase": None,
@@ -2326,6 +2335,13 @@ async def _exit_monitor_loop():
                             else:
                                 _sh["giveback_streak"] = 0
                         _sh["last_cpnl_r"] = _cpnl_r_tick
+                        # AR 2-tick confirmation: track consecutive ticks below threshold
+                        _ar_pk_sh  = _sh.get("peak_pnl_r", 0.0)
+                        _ar_thr_sh = 0.02 if _ar_pk_sh >= 0.10 else -0.05
+                        if _cpnl_r_tick < _ar_thr_sh:
+                            _sh["ar_below_thresh_ticks"] = _sh.get("ar_below_thresh_ticks", 0) + 1
+                        else:
+                            _sh["ar_below_thresh_ticks"] = 0
                     _now_candle_ts = (
                         int(time.time())
                         // 60) * 60
